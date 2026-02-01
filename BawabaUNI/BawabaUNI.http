@@ -1,0 +1,6 @@
+@BawabaUNI_HostAddress = http://localhost:5180
+
+GET {{BawabaUNI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
