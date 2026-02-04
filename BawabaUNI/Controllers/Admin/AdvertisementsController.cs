@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace BawabaUNI.Controllers.Admin
 {
-    [Route("api/[controller]")]
+    [Route("api/Admin/[controller]")]
     [ApiController]
     public class AdvertisementsController : ControllerBase
     {

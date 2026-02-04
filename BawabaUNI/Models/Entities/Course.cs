@@ -54,5 +54,6 @@ namespace BawabaUNI.Models.Entities
         public virtual ICollection<LessonLearned> LessonsLearned { get; set; }
         public virtual ICollection<Video> Videos { get; set; }
         public virtual ICollection<StudentCourse> StudentCourses { get; set; }
+        public virtual ICollection<CourseFeedback> CourseFeedbacks { get; set; }
     }
 }

@@ -9,7 +9,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace BawabaUNI.Controllers.Admin
 {
-    [Route("api/[controller]")]
+    [Route("api/Admin/[controller]")]
     [ApiController]
     public class UniversityController : ControllerBase
     {
@@ -718,6 +718,159 @@ namespace BawabaUNI.Controllers.Admin
             };
 
             return Ok(result);
+        }
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetUniversityById(int id)
+        {
+            try
+            {
+                // جلب الجامعة مع جميع العلاقات المهمة
+                var university = await _context.Universities
+                    .Include(u => u.HousingOptions.Where(h => !h.IsDeleted))
+                    .Include(u => u.DocumentsRequired.Where(d => !d.IsDeleted))
+                    .Include(u => u.Faculties.Where(f => !f.IsDeleted))
+                    .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted);
+
+                if (university == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "الجامعة غير موجودة"
+                    });
+                }
+
+                // تحويل إلى DTO مناسب للعرض
+                var universityDto = new UniversityDetailDto
+                {
+                    Id = university.Id,
+                    Type = university.Type,
+                    NameArabic = university.NameArabic,
+                    NameEnglish = university.NameEnglish,
+                    IsTrending = university.IsTrending,
+                    Description = university.Description,
+                    FoundingYear = university.FoundingYear,
+                    StudentsNumber = university.StudentsNumber,
+                    Location = university.Location,
+                    GlobalRanking = university.GlobalRanking,
+                    UniversityImage = !string.IsNullOrEmpty(university.UniversityImage)
+                        ? $"{Request.Scheme}://{Request.Host}{university.UniversityImage}"
+                        : null,
+                    Email = university.Email,
+                    Website = university.Website,
+                    PhoneNumber = university.PhoneNumber,
+                    FacebookPage = university.FacebookPage,
+                    Address = university.Address,
+                    City = university.City,
+                    Governate = university.Governate,
+                    PostalCode = university.PostalCode,
+                    CreatedAt = university.CreatedAt,
+
+                    HousingOptions = university.HousingOptions.Select(h => new HousingOptionDto
+                    {
+                        Id = h.Id,
+                        Name = h.Name,
+                        PhoneNumber = h.PhoneNumber,
+                        Description = h.Description,
+                        ImagePath = !string.IsNullOrEmpty(h.ImagePath)
+                            ? $"{Request.Scheme}://{Request.Host}{h.ImagePath}"
+                            : null,
+                        CreatedAt = h.CreatedAt
+                    }).ToList(),
+
+                    DocumentsRequired = university.DocumentsRequired.Select(d => new DocumentRequiredDto
+                    {
+                        Id = d.Id,
+                        DocumentName = d.DocumentName,
+                        Description = d.Description,
+                        CreatedAt = d.CreatedAt
+                    }).ToList(),
+
+                    Faculties = university.Faculties.Select(f => new FacultySimpleDto
+                    {
+                        Id = f.Id,
+                        NameArabic = f.NameArabic,
+                        NameEnglish = f.NameEnglish,
+                        Description = f.Description,
+                        CreatedAt = f.CreatedAt
+                    }).ToList()
+                };
+
+                return Ok(new
+                {
+                    success = true,
+                    data = universityDto
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "حدث خطأ أثناء جلب بيانات الجامعة",
+                    error = ex.Message
+                });
+            }
+        }
+
+        // DTOs اللازمة للعرض التفصيلي
+        public class UniversityDetailDto
+        {
+            public int Id { get; set; }
+            public string Type { get; set; }
+            public string NameArabic { get; set; }
+            public string NameEnglish { get; set; }
+            public bool IsTrending { get; set; }
+            public string Description { get; set; }
+            public int FoundingYear { get; set; }
+            public int? StudentsNumber { get; set; }
+            public string? Location { get; set; }
+            public int? GlobalRanking { get; set; }
+            public string? UniversityImage { get; set; }
+            public string Email { get; set; }
+            public string? Website { get; set; }
+            public string PhoneNumber { get; set; }
+            public string? FacebookPage { get; set; }
+            public string Address { get; set; }
+            public string? City { get; set; }
+            public string? Governate { get; set; }
+            public string? PostalCode { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime UpdatedAt { get; set; }
+
+            public List<HousingOptionDto> HousingOptions { get; set; } = new();
+            public List<DocumentRequiredDto> DocumentsRequired { get; set; } = new();
+            public List<FacultySimpleDto> Faculties { get; set; } = new();
+        }
+
+        public class HousingOptionDto
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public string PhoneNumber { get; set; }
+            public string Description { get; set; }
+            public string? ImagePath { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime UpdatedAt { get; set; }
+        }
+
+        public class DocumentRequiredDto
+        {
+            public int Id { get; set; }
+            public string DocumentName { get; set; }
+            public string Description { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime UpdatedAt { get; set; }
+        }
+
+        public class FacultySimpleDto
+        {
+            public int Id { get; set; }
+            public string NameArabic { get; set; }
+            public string NameEnglish { get; set; }
+            public string Description { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime UpdatedAt { get; set; }
         }
 
     }

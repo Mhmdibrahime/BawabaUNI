@@ -13,7 +13,7 @@ using BawabaUNI.Models.DTOs.Admin.ArticlesDTOs;
 
 namespace BawabaUNI.Controllers.Admin
 {
-    [Route("api/[controller]")]
+    [Route("api/Admin/[controller]")]
     [ApiController]
     public class ArticlesController : ControllerBase
     {
