@@ -26,7 +26,6 @@ namespace BawabaUNI.Controllers.User
             public string AuthorImage { get; set; }
             public DateTime Date { get; set; }
             public int ReadTime { get; set; }
-            public string Tags { get; set; }
             public DateTime CreatedDate { get; set; }
             public string ShortDescription { get; set; }
         }
@@ -59,8 +58,7 @@ namespace BawabaUNI.Controllers.User
                     query = query.Where(a =>
                         a.Title.ToLower().Contains(search) ||
                         a.Description.ToLower().Contains(search) ||
-                        a.Content.ToLower().Contains(search) ||
-                        a.Tags.ToLower().Contains(search));
+                        a.Content.ToLower().Contains(search));
                 }
 
                 // البحث بالكاتب
@@ -70,12 +68,7 @@ namespace BawabaUNI.Controllers.User
                     query = query.Where(a => a.AuthorName.Contains(author));
                 }
 
-                // البحث بالوسم
-                if (!string.IsNullOrWhiteSpace(tag))
-                {
-                    tag = tag.Trim().ToLower();
-                    query = query.Where(a => a.Tags.ToLower().Contains(tag));
-                }
+               
 
                 // فلترة حسب التاريخ من
                 if (fromDate.HasValue)
@@ -127,7 +120,6 @@ namespace BawabaUNI.Controllers.User
                         AuthorImage = a.AuthorImage,
                         Date = a.Date,
                         ReadTime = a.ReadTime,
-                        Tags = a.Tags,
                         CreatedDate = a.CreatedAt,
                         // حقل محسوب للعرض المختصر
                         ShortDescription = a.Description.Length > 150 ?
@@ -194,7 +186,6 @@ namespace BawabaUNI.Controllers.User
                         Content = a.Content,
                         Date = a.Date,
                         ReadTime = a.ReadTime,
-                        Tags = a.Tags,
                         CreatedDate = a.CreatedAt
                     })
                     .FirstOrDefaultAsync();
