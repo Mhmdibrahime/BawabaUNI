@@ -30,6 +30,7 @@ namespace BawabaUNI.Models.Data
         public DbSet<AcademicMaterial> AcademicMaterials { get; set; }
         public DbSet<JobOpportunity> JobOpportunities { get; set; }
         public DbSet<Course> Courses { get; set; }
+        public DbSet<CourseFeedback> CourseFeedbacks { get; set; }
         public DbSet<LessonLearned> LessonsLearned { get; set; }
         public DbSet<Video> Videos { get; set; }
         public DbSet<Article> Articles { get; set; }
@@ -197,9 +198,6 @@ namespace BawabaUNI.Models.Data
                 .Property(a => a.Type)
                 .HasConversion<string>();
 
-            modelBuilder.Entity<Video>()
-                .Property(v => v.VideoType)
-                .HasConversion<string>();
 
             modelBuilder.Entity<Advertisement>()
                 .Property(a => a.Status)

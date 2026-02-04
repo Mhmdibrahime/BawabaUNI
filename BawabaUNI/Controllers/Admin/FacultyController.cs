@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BawabaUNI.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/Admin/[controller]")]
     public class FacultiesController : ControllerBase
     {
         private readonly AppDbContext _context;

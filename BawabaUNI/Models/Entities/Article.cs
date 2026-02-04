@@ -35,7 +35,6 @@ namespace BawabaUNI.Models.Entities
         [Range(1, 120)]
         public int ReadTime { get; set; }
 
-        [MaxLength(200)]
-        public string Tags { get; set; }
+       
     }
 }

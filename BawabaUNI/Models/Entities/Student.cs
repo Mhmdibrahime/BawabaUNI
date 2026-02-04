@@ -17,5 +17,6 @@ namespace BawabaUNI.Models.Entities
         public virtual ApplicationUser ApplicationUser { get; set; }
 
         public virtual ICollection<StudentCourse> StudentCourses { get; set; }
+        public virtual ICollection<CourseFeedback> CourseFeedbacks { get; set; }
     }
 }

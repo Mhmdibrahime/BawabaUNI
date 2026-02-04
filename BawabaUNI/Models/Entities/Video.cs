@@ -15,8 +15,7 @@ namespace BawabaUNI.Models.Entities
         public int DurationInMinutes { get; set; }
 
         [Required]
-        [MaxLength(20)]
-        public string VideoType { get; set; }
+        public bool IsPaid { get; set; }
 
         [MaxLength(2000)]
         public string Description { get; set; }
@@ -24,6 +23,12 @@ namespace BawabaUNI.Models.Entities
         [Required]
         [MaxLength(500)]
         public string VideoLink { get; set; }
+
+        // ✅ ADD THIS NEW PROPERTY:
+        public string? PlayerEmbedUrl { get; set; }
+
+        // Optional but helpful:
+        public string? VimeoId { get; set; }
 
         public int CourseId { get; set; }
 

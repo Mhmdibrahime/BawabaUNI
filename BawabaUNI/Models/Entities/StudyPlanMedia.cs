@@ -17,7 +17,7 @@ namespace BawabaUNI.Models.Entities
 
         [MaxLength(500)]
         [Url]
-        public string VisitLink { get; set; }
+        public string? VisitLink { get; set; }
 
         // Foreign Key to StudyPlanYear
         public int StudyPlanYearId { get; set; }

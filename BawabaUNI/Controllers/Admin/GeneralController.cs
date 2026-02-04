@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace BawabaUNI.Controllers.Admin
 {
-    [Route("api/admin/[controller]")]
+    [Route("api/Admin/admin/[controller]")]
     [ApiController]
     public class GeneralController : ControllerBase
     {
