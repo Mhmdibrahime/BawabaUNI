@@ -1,7 +1,12 @@
 ﻿using BawabaUNI.Models.Data;
+using BawabaUNI.Models.DTOs.User;
+using BawabaUNI.Models.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace BawabaUNI.Controllers.User
 {
@@ -10,10 +15,12 @@ namespace BawabaUNI.Controllers.User
     public class CourseController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public CourseController(AppDbContext context)
+        public CourseController(AppDbContext context , UserManager<ApplicationUser> userManager)
         {
             _context = context;
+            _userManager = userManager;
         }
 
         public class CourseResponseDto
@@ -331,5 +338,326 @@ namespace BawabaUNI.Controllers.User
                 });
             }
         }
+        private async Task<ApplicationUser> GetCurrentUser()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) return null;
+
+            return await _userManager.FindByIdAsync(userId);
+        }
+
+        // دالة مساعدة: التحقق من اشتراك الطالب في الكورس
+        private async Task<bool> HasCourseAccess(int courseId, string userId)
+        {
+            if (string.IsNullOrEmpty(userId)) return false;
+
+            // التحقق من جدول StudentCourse
+            var student = await _context.Students
+                .FirstOrDefaultAsync(s => s.ApplicationUserId == userId && !s.IsDeleted);
+
+            if (student == null) return false;
+
+            var studentCourse = await _context.StudentCourses
+                .FirstOrDefaultAsync(sc => sc.StudentId == student.Id &&
+                                          sc.CourseId == courseId &&
+                                          !sc.IsDeleted);
+
+            // التحقق من أن الطالب مشترك والاشتراك مفعل
+            return studentCourse != null;
+        }
+
+        // دالة مساعدة: الحصول على Student
+        private async Task<Student> GetCurrentStudent()
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return null;
+
+            return await _context.Students
+                .FirstOrDefaultAsync(s => s.ApplicationUserId == user.Id && !s.IsDeleted);
+        }
+
+        // 1. الحصول على جميع فيديوهات الكورس (مع التحقق من الصلاحيات)
+        [HttpGet("{courseId}/videos")]
+        public async Task<IActionResult> GetCourseVideos(int courseId)
+        {
+            try
+            {
+                var user = await GetCurrentUser();
+                var hasAccess = user != null && await HasCourseAccess(courseId, user.Id);
+
+                var videos = await _context.Videos
+                    .Where(v => v.CourseId == courseId && !v.IsDeleted)
+                    .OrderBy(v => v.CreatedAt)
+                    .Select(v => new VideoCourseDto
+                    {
+                        Id = v.Id,
+                        Title = v.Title,
+                        DurationInMinutes = v.DurationInMinutes,
+                        IsPaid = v.IsPaid,
+                        Description = v.Description,
+                        CanAccess = !v.IsPaid || hasAccess, // الفيديوهات المجانية متاحة للجميع
+                        AccessMessage = !v.IsPaid ? "فيديو مجاني" :
+                                       hasAccess ? "متاح للعرض" : "يتطلب شراء الكورس",
+                        PlayerEmbedUrl = (!v.IsPaid || hasAccess) ? v.PlayerEmbedUrl : null,
+                        VimeoId = v.VimeoId,
+                        CreatedAt = v.CreatedAt
+                    })
+                    .ToListAsync();
+
+                // إضافة فيديوهات عينة مجانية إذا لم يكن لدى المستخدم وصول
+                if (!hasAccess && videos.Count(v => !v.IsPaid) < 3)
+                {
+                    return StatusCode(403, new
+                    {
+                        Success = false,
+                        Message = "غير مصرح بالوصول",
+                        Error = "يتطلب شراء الكورس لمشاهدة هذا الفيديو"
+                    });
+                    }
+            
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "تم جلب الفيديوهات بنجاح",
+                    Data = new
+                    {
+                        Videos = videos,
+                        TotalVideos = videos.Count,
+                        FreeVideos = videos.Count(v => !v.IsPaid),
+                        PaidVideos = videos.Count(v => v.IsPaid),
+                        HasCourseAccess = hasAccess,
+                        UserHasAccess = hasAccess
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء جلب الفيديوهات",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        // 2. الحصول على فيديو محدد (مع التحقق من الصلاحيات)
+        [HttpGet("{courseId}/videos/{videoId}")]
+        public async Task<IActionResult> GetVideoById(int courseId, int videoId)
+        {
+            try
+            {
+                var user = await GetCurrentUser();
+                var hasAccess = user != null && await HasCourseAccess(courseId, user.Id);
+
+                var video = await _context.Videos
+                    .Include(v => v.Course)
+                    .Where(v => v.Id == videoId &&
+                                v.CourseId == courseId &&
+                                !v.IsDeleted)
+                    .Select(v => new
+                    {
+                        Id = v.Id,
+                        Title = v.Title,
+                        DurationInMinutes = v.DurationInMinutes,
+                        IsPaid = v.IsPaid,
+                        Description = v.Description,
+                        VideoLink = v.VideoLink,
+                        PlayerEmbedUrl = v.PlayerEmbedUrl,
+                        VimeoId = v.VimeoId,
+                        CourseId = v.CourseId,
+                        CourseName = v.Course.NameArabic,
+                        CreatedAt = v.CreatedAt
+                    })
+                    .FirstOrDefaultAsync();
+
+                if (video == null)
+                {
+                    return NotFound(new
+                    {
+                        Success = false,
+                        Message = "الفيديو غير موجود"
+                    });
+                }
+
+                // التحقق من الصلاحية
+                if (video.IsPaid && !hasAccess)
+                {
+                    return Ok(new
+                    {
+                        Success = true,
+                        Message = "يتطلب شراء الكورس لمشاهدة هذا الفيديو",
+                        Data = new
+                        {
+                            Id = video.Id,
+                            Title = video.Title,
+                            DurationInMinutes = video.DurationInMinutes,
+                            IsPaid = video.IsPaid,
+                            Description = video.Description,
+                            CanAccess = false,
+                            AccessMessage = "يتطلب شراء الكورس",
+                            CourseId = video.CourseId,
+                            CourseName = video.CourseName,
+                            PreviewAvailable = false,
+                            UpgradePrompt = "اشترك الآن لمشاهدة هذا الفيديو وجميع محتويات الكورس"
+                        }
+                    });
+                }
+
+               
+               
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "تم جلب الفيديو بنجاح",
+                    Data = new FullVideoDto
+                    {
+                        Id = video.Id,
+                        Title = video.Title,
+                        DurationInMinutes = video.DurationInMinutes,
+                        IsPaid = video.IsPaid,
+                        Description = video.Description,
+                        VideoLink = video.VideoLink,
+                        PlayerEmbedUrl = video.PlayerEmbedUrl,
+                        VimeoId = video.VimeoId,
+                        CourseId = video.CourseId,
+                        CourseName = video.CourseName,
+                        CanAccess = true,
+                        AccessMessage = "متاح للعرض"
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء جلب الفيديو",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        // 3. الحصول على فيديوهات مجانية فقط
+        [HttpGet("{courseId}/videos/free")]
+        public async Task<IActionResult> GetFreeVideos(int courseId)
+        {
+            try
+            {
+                var videos = await _context.Videos
+                    .Where(v => v.CourseId == courseId &&
+                                !v.IsPaid &&
+                                !v.IsDeleted)
+                    .OrderBy(v => v.CreatedAt)
+                    .Select(v => new FullVideoDto
+                    {
+                        Id = v.Id,
+                        Title = v.Title,
+                        DurationInMinutes = v.DurationInMinutes,
+                        IsPaid = v.IsPaid,
+                        Description = v.Description,
+                        VideoLink = v.VideoLink,
+                        PlayerEmbedUrl = v.PlayerEmbedUrl,
+                        VimeoId = v.VimeoId,
+                        CourseId = v.CourseId,
+                        CanAccess = true,
+                        AccessMessage = "فيديو مجاني"
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "تم جلب الفيديوهات المجانية بنجاح",
+                    Data = videos,
+                    Count = videos.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء جلب الفيديوهات المجانية",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        // 4. فحص صلاحية وصول المستخدم لفيديو محدد
+        [HttpGet("{courseId}/videos/{videoId}/check-access")]
+        [Authorize]
+        public async Task<IActionResult> CheckVideoAccess(int courseId, int videoId)
+        {
+            try
+            {
+                var user = await GetCurrentUser();
+                if (user == null)
+                {
+                    return Unauthorized(new
+                    {
+                        Success = false,
+                        Message = "غير مصرح بالوصول"
+                    });
+                }
+
+                var video = await _context.Videos
+                    .FirstOrDefaultAsync(v => v.Id == videoId &&
+                                              v.CourseId == courseId &&
+                                              !v.IsDeleted);
+
+                if (video == null)
+                {
+                    return NotFound(new
+                    {
+                        Success = false,
+                        Message = "الفيديو غير موجود"
+                    });
+                }
+
+                var hasCourseAccess = await HasCourseAccess(courseId, user.Id);
+                var canAccess = !video.IsPaid || hasCourseAccess;
+
+                // الحصول على معلومات الاشتراك
+                var student = await GetCurrentStudent();
+                var studentCourse = student != null ?
+                    await _context.StudentCourses
+                        .FirstOrDefaultAsync(sc => sc.StudentId == student.Id &&
+                                                  sc.CourseId == courseId &&
+                                                  !sc.IsDeleted) : null;
+
+                var accessCheck = new VideoAccessCheckDto
+                {
+                    HasAccess = canAccess,
+                    Message = canAccess ? "يمكنك مشاهدة الفيديو" :
+                             video.IsPaid ? "يتطلب شراء الكورس" : "فيديو مجاني",
+                    IsCoursePaid = video.IsPaid,
+                    IsVideoFree = !video.IsPaid,
+                    IsTrialAvailable = !hasCourseAccess && studentCourse == null, // عرض تجريبي
+                    PurchaseDate = studentCourse?.CreatedAt,
+               
+                };
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "تم فحص الصلاحية بنجاح",
+                    Data = accessCheck
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء فحص الصلاحية",
+                    Error = ex.Message
+                });
+            }
+        }
+
+
     }
 }

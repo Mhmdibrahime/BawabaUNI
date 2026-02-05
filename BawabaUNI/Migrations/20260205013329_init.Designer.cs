@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BawabaUNI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260201225733_editHeroAndPartnerEntities")]
-    partial class editHeroAndPartnerEntities
+    [Migration("20260205013329_init")]
+    partial class init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -268,11 +268,6 @@ namespace BawabaUNI.Migrations
                     b.Property<int>("ReadTime")
                         .HasColumnType("int");
 
-                    b.Property<string>("Tags")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -286,6 +281,85 @@ namespace BawabaUNI.Migrations
                     b.HasIndex("Date");
 
                     b.ToTable("Articles");
+                });
+
+            modelBuilder.Entity("BawabaUNI.Models.Entities.ConsultationRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AssignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AssignedToUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("ConsultationFee")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(MAX)");
+
+                    b.Property<DateTime?>("PaymentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaymentReference")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("StudentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedToUserId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("ConsultationRequests");
                 });
 
             modelBuilder.Entity("BawabaUNI.Models.Entities.Course", b =>
@@ -369,6 +443,49 @@ namespace BawabaUNI.Migrations
                         .IsUnique();
 
                     b.ToTable("Courses");
+                });
+
+            modelBuilder.Entity("BawabaUNI.Models.Entities.CourseFeedback", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("CourseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("CourseFeedbacks");
                 });
 
             modelBuilder.Entity("BawabaUNI.Models.Entities.DocumentRequired", b =>
@@ -834,7 +951,6 @@ namespace BawabaUNI.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("VisitLink")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
@@ -1083,6 +1199,12 @@ namespace BawabaUNI.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PlayerEmbedUrl")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1096,10 +1218,8 @@ namespace BawabaUNI.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("VideoType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<string>("VimeoId")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -1256,6 +1376,40 @@ namespace BawabaUNI.Migrations
                     b.Navigation("StudyPlanSection");
 
                     b.Navigation("StudyPlanYear");
+                });
+
+            modelBuilder.Entity("BawabaUNI.Models.Entities.ConsultationRequest", b =>
+                {
+                    b.HasOne("BawabaUNI.Models.Data.ApplicationUser", "AssignedTo")
+                        .WithMany()
+                        .HasForeignKey("AssignedToUserId");
+
+                    b.HasOne("BawabaUNI.Models.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId");
+
+                    b.Navigation("AssignedTo");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("BawabaUNI.Models.Entities.CourseFeedback", b =>
+                {
+                    b.HasOne("BawabaUNI.Models.Entities.Course", "Course")
+                        .WithMany("CourseFeedbacks")
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BawabaUNI.Models.Entities.Student", "Student")
+                        .WithMany("CourseFeedbacks")
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Course");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("BawabaUNI.Models.Entities.DocumentRequired", b =>
@@ -1457,6 +1611,8 @@ namespace BawabaUNI.Migrations
 
             modelBuilder.Entity("BawabaUNI.Models.Entities.Course", b =>
                 {
+                    b.Navigation("CourseFeedbacks");
+
                     b.Navigation("LessonsLearned");
 
                     b.Navigation("StudentCourses");
@@ -1475,6 +1631,8 @@ namespace BawabaUNI.Migrations
 
             modelBuilder.Entity("BawabaUNI.Models.Entities.Student", b =>
                 {
+                    b.Navigation("CourseFeedbacks");
+
                     b.Navigation("StudentCourses");
                 });
 

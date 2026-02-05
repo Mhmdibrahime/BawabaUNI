@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace BawabaUNI.Migrations
 {
     /// <inheritdoc />
-    public partial class intial : Migration
+    public partial class init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -49,7 +49,6 @@ namespace BawabaUNI.Migrations
                     Content = table.Column<string>(type: "nvarchar(MAX)", nullable: false),
                     Date = table.Column<DateTime>(type: "datetime2", nullable: false),
                     ReadTime = table.Column<int>(type: "int", nullable: false),
-                    Tags = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -139,8 +138,6 @@ namespace BawabaUNI.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     ImagePath = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
-                    AltText = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    DisplayOrder = table.Column<int>(type: "int", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -159,7 +156,6 @@ namespace BawabaUNI.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     ImagePath = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     Link = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -366,9 +362,11 @@ namespace BawabaUNI.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Title = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     DurationInMinutes = table.Column<int>(type: "int", nullable: false),
-                    VideoType = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    IsPaid = table.Column<bool>(type: "bit", nullable: false),
                     Description = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false),
                     VideoLink = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    PlayerEmbedUrl = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    VimeoId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CourseId = table.Column<int>(type: "int", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -466,6 +464,77 @@ namespace BawabaUNI.Migrations
                         name: "FK_HousingOptions_Universities_UniversityId",
                         column: x => x.UniversityId,
                         principalTable: "Universities",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ConsultationRequests",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    FullName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    PhoneNumber = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Message = table.Column<string>(type: "nvarchar(MAX)", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    AssignedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    StudentId = table.Column<int>(type: "int", nullable: true),
+                    AssignedToUserId = table.Column<string>(type: "nvarchar(450)", nullable: true),
+                    ConsultationFee = table.Column<decimal>(type: "decimal(10,2)", nullable: true),
+                    IsPaid = table.Column<bool>(type: "bit", nullable: false),
+                    PaymentDate = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    PaymentReference = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ConsultationRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ConsultationRequests_AspNetUsers_AssignedToUserId",
+                        column: x => x.AssignedToUserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_ConsultationRequests_Students_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "Students",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "CourseFeedbacks",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CourseId = table.Column<int>(type: "int", nullable: false),
+                    StudentId = table.Column<int>(type: "int", nullable: false),
+                    Rating = table.Column<int>(type: "int", nullable: false),
+                    Comment = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CourseFeedbacks", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CourseFeedbacks_Courses_CourseId",
+                        column: x => x.CourseId,
+                        principalTable: "Courses",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_CourseFeedbacks_Students_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "Students",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -588,7 +657,7 @@ namespace BawabaUNI.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     MediaType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     MediaLink = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    VisitLink = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    VisitLink = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     StudyPlanYearId = table.Column<int>(type: "int", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -724,6 +793,26 @@ namespace BawabaUNI.Migrations
                 column: "NormalizedUserName",
                 unique: true,
                 filter: "[NormalizedUserName] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ConsultationRequests_AssignedToUserId",
+                table: "ConsultationRequests",
+                column: "AssignedToUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ConsultationRequests_StudentId",
+                table: "ConsultationRequests",
+                column: "StudentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CourseFeedbacks_CourseId",
+                table: "CourseFeedbacks",
+                column: "CourseId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CourseFeedbacks_StudentId",
+                table: "CourseFeedbacks",
+                column: "StudentId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Courses_Classification",
@@ -876,6 +965,12 @@ namespace BawabaUNI.Migrations
 
             migrationBuilder.DropTable(
                 name: "AspNetUserTokens");
+
+            migrationBuilder.DropTable(
+                name: "ConsultationRequests");
+
+            migrationBuilder.DropTable(
+                name: "CourseFeedbacks");
 
             migrationBuilder.DropTable(
                 name: "DocumentsRequired");

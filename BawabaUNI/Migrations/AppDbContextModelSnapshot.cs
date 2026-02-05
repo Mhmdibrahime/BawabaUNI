@@ -948,7 +948,6 @@ namespace BawabaUNI.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("VisitLink")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
@@ -1374,6 +1373,21 @@ namespace BawabaUNI.Migrations
                     b.Navigation("StudyPlanSection");
 
                     b.Navigation("StudyPlanYear");
+                });
+
+            modelBuilder.Entity("BawabaUNI.Models.Entities.ConsultationRequest", b =>
+                {
+                    b.HasOne("BawabaUNI.Models.Data.ApplicationUser", "AssignedTo")
+                        .WithMany()
+                        .HasForeignKey("AssignedToUserId");
+
+                    b.HasOne("BawabaUNI.Models.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId");
+
+                    b.Navigation("AssignedTo");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("BawabaUNI.Models.Entities.CourseFeedback", b =>
