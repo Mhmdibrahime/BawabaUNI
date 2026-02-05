@@ -36,6 +36,7 @@ namespace BawabaUNI.Models.Data
         public DbSet<Advertisement> Advertisements { get; set; }
         public DbSet<Student> Students { get; set; }
         public DbSet<StudentCourse> StudentCourses { get; set; }
+        public DbSet<ConsultationRequest> ConsultationRequests { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

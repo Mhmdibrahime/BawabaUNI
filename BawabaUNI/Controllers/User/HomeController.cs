@@ -1,4 +1,5 @@
 ﻿using BawabaUNI.Models.Data;
+using BawabaUNI.Models.DTOs.User;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -513,6 +514,51 @@ namespace BawabaUNI.Controllers.User
                 Message = "Click count updated successfully",
                 NewClickCount = advertisement.ClickCount
             });
+        }
+
+        
+
+        
+        [HttpGet]
+        public async Task<IActionResult> GetAllPartners()
+        {
+            try
+            {
+                var partners = await _context.Partners
+                    .Where(p => !p.IsDeleted) 
+                    .OrderBy(p => p.CreatedAt) 
+                    .Select(p => new PartnerResponseDto
+                    {
+                        
+                        ImagePath = p.ImagePath,
+                        Link = p.Link,
+                       
+                    })
+                    .ToListAsync();
+
+              
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "تم جلب الشركاء بنجاح",
+                    Data = new
+                    {
+                        Partners = partners,
+                        Count = partners.Count,
+                        LastUpdated = partners.Any() ? partners.Max(p => p.UpdatedAt ?? p.CreatedAt) : DateTime.UtcNow
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء جلب الشركاء",
+                    Error = ex.Message
+                });
+            }
         }
 
     }
