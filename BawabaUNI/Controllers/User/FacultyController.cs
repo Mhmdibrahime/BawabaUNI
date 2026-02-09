@@ -1,7 +1,9 @@
 ﻿using BawabaUNI.Models.Data;
+using BawabaUNI.Models.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection.Metadata;
 
 namespace BawabaUNI.Controllers.User
 {
@@ -25,7 +27,6 @@ namespace BawabaUNI.Controllers.User
             public string DurationOfStudy { get; set; }
             public int? ProgramsNumber { get; set; }
             public int? Rank { get; set; }
-            public string Specializations { get; set; }
             public bool RequireAcceptanceTests { get; set; }
             public DateTime CreatedDate { get; set; }
 
@@ -42,41 +43,6 @@ namespace BawabaUNI.Controllers.User
             public int StudyYearsCount { get; set; }
             public string ShortDescription { get; set; }
             public string AcceptanceType { get; set; }
-        }
-
-        public class FacultyDetailDto : FacultyResponseDto
-        {
-            public UniversityInfoDto University { get; set; }
-            public List<StudyPlanYearDto> StudyPlanYears { get; set; }
-            public List<SpecializationDto> SpecializationList { get; set; }
-            public List<JobOpportunityDto> JobOpportunities { get; set; }
-        }
-
-        public class UniversityInfoDto
-        {
-            public int Id { get; set; }
-            public string NameArabic { get; set; }
-            public string NameEnglish { get; set; }
-            public string Type { get; set; }
-            public string Location { get; set; }
-            public string UniversityImage { get; set; }
-            public string Website { get; set; }
-            public string PhoneNumber { get; set; }
-            public string Email { get; set; }
-            public string Address { get; set; }
-            public string City { get; set; }
-            public string Governate { get; set; }
-        }
-
-        public class StudyPlanYearDto
-        {
-            public int Id { get; set; }
-            public string YearName { get; set; }
-            public int YearNumber { get; set; }
-            public string Type { get; set; }
-            public DateTime CreatedDate { get; set; }
-            public List<StudyPlanSectionDto> Sections { get; set; }
-            public List<StudyPlanMediaDto> Media { get; set; }
         }
 
         public class StudyPlanSectionDto
@@ -120,7 +86,56 @@ namespace BawabaUNI.Controllers.User
             public int Id { get; set; }
             public string Name { get; set; }
         }
+        public class FacultyDetailDto
+        {
+            public int Id { get; set; }
+            public string NameArabic { get; set; }
+            public string NameEnglish { get; set; }
+            public string Description { get; set; }
+            public int? StudentsNumber { get; set; }
+            public string DurationOfStudy { get; set; }
+            public int? ProgramsNumber { get; set; }
+            public int? Rank { get; set; }
+            public bool RequireAcceptanceTests { get; set; }
+            public DateTime CreatedDate { get; set; }
 
+            public UniversityInfoDto University { get; set; }
+            public List<StudyPlanYearDto> StudyPlanYears { get; set; }
+            public List<SpecializationDto> SpecializationList { get; set; }
+            public List<JobOpportunityDto> JobOpportunities { get; set; }
+        }
+
+        public class UniversityInfoDto
+        {
+            public int Id { get; set; }
+            public string NameArabic { get; set; }
+            public string NameEnglish { get; set; }
+            public string Type { get; set; }
+            public string Location { get; set; }
+            public string UniversityImage { get; set; }
+            public string Website { get; set; }
+            public string PhoneNumber { get; set; }
+            public string Email { get; set; }
+            public string Address { get; set; }
+            public string City { get; set; }
+            public string Governate { get; set; }
+            public int FoundingYear { get; set; }
+
+            public List<DocumentRequired> Documents { get; set; }
+
+        }
+
+        public class StudyPlanYearDto
+        {
+            public int Id { get; set; }
+            public string YearName { get; set; }
+            public int YearNumber { get; set; }
+            public string Type { get; set; }
+            public DateTime CreatedDate { get; set; }
+            public List<StudyPlanSectionDto> Sections { get; set; }
+            public List<StudyPlanMediaDto> Media { get; set; }
+            public List<AcademicMaterialDto> AcademicMaterials { get; set; }
+        }
         [HttpGet("faculties")]
         public async Task<IActionResult> GetAllFaculties(
     [FromQuery] string search = null,
@@ -152,8 +167,7 @@ namespace BawabaUNI.Controllers.User
                     query = query.Where(f =>
                         f.NameArabic.ToLower().Contains(search) ||
                         f.NameEnglish.ToLower().Contains(search) ||
-                        f.Description.ToLower().Contains(search) ||
-                        f.Specializations.ToLower().Contains(search));
+                        f.Description.ToLower().Contains(search) );
                 }
 
                 // البحث بجامعة محددة (ID)
@@ -254,7 +268,6 @@ namespace BawabaUNI.Controllers.User
                         DurationOfStudy = f.DurationOfStudy,
                         ProgramsNumber = f.ProgramsNumber,
                         Rank = f.Rank,
-                        Specializations = f.Specializations,
                         RequireAcceptanceTests = f.RequireAcceptanceTests,
                         CreatedDate = f.CreatedAt,
                         // معلومات الجامعة
@@ -317,7 +330,6 @@ namespace BawabaUNI.Controllers.User
             }
         }
 
-        // 2. الحصول على كلية واحدة بالكامل حسب ID
         [HttpGet("faculties/{id}")]
         public async Task<IActionResult> GetFacultyById(int id)
         {
@@ -344,7 +356,6 @@ namespace BawabaUNI.Controllers.User
                         DurationOfStudy = f.DurationOfStudy,
                         ProgramsNumber = f.ProgramsNumber,
                         Rank = f.Rank,
-                        Specializations = f.Specializations,
                         RequireAcceptanceTests = f.RequireAcceptanceTests,
                         CreatedDate = f.CreatedAt,
                         // معلومات الجامعة
@@ -361,7 +372,14 @@ namespace BawabaUNI.Controllers.User
                             Email = f.University.Email,
                             Address = f.University.Address,
                             City = f.University.City,
-                            Governate = f.University.Governate
+                            FoundingYear = f.University.FoundingYear,
+                            Documents = f.University.DocumentsRequired != null ? f.University.DocumentsRequired.Select(x => new DocumentRequired
+                            {
+                                DocumentName = x.DocumentName,
+                                Description = x.Description
+                            }).ToList() : new List<DocumentRequired>()
+
+
                         } : null,
                         // خطة الدراسة
                         StudyPlanYears = f.StudyPlanYears != null ? f.StudyPlanYears.Select(spy => new StudyPlanYearDto
@@ -371,6 +389,15 @@ namespace BawabaUNI.Controllers.User
                             YearNumber = spy.YearNumber,
                             Type = spy.Type,
                             CreatedDate = spy.CreatedAt,
+                            AcademicMaterials = spy.AcademicMaterials != null ? spy.AcademicMaterials.Select(am => new AcademicMaterialDto
+                            {
+                                Id = am.Id,
+                                Name = am.Name,
+                                Code = am.Code,
+                                Semester = am.Semester,
+                                Type = am.Type,
+                                CreditHours = am.CreditHours
+                            }).ToList() : new List<AcademicMaterialDto>(),
                             Sections = spy.Sections != null ? spy.Sections.Select(sps => new StudyPlanSectionDto
                             {
                                 Id = sps.Id,
@@ -408,8 +435,9 @@ namespace BawabaUNI.Controllers.User
                         JobOpportunities = f.JobOpportunities != null ? f.JobOpportunities.Select(j => new JobOpportunityDto
                         {
                             Id = j.Id,
-                            Name = j.Name
+                            Name = j.Name,
                         }).ToList() : new List<JobOpportunityDto>()
+
                     })
                     .FirstOrDefaultAsync();
 
@@ -422,8 +450,8 @@ namespace BawabaUNI.Controllers.User
                     });
                 }
 
-                // الحصول على كليات مشابهة (بنفس الجامعة أو نفس التخصصات)
-               
+
+
 
                 var response = new
                 {
@@ -432,12 +460,12 @@ namespace BawabaUNI.Controllers.User
                     Data = new
                     {
                         Faculty = faculty,
-                      
+
                         Statistics = new
                         {
                             TotalYears = faculty.StudyPlanYears.Count,
                             TotalSpecializations = faculty.SpecializationList.Count,
-                            TotalJobOpportunities = faculty.JobOpportunities.Count,
+
                             TotalMaterials = faculty.StudyPlanYears.Sum(y =>
                                 y.Sections.Sum(s => s.AcademicMaterials.Count)),
                             AcceptanceStatus = faculty.RequireAcceptanceTests ?
@@ -510,7 +538,7 @@ namespace BawabaUNI.Controllers.User
         {
             var faculties = await _context.Faculties
                 .Where(u => !u.IsDeleted)
-                .Where(f => f.Specializations.Contains(specialization))
+              
                 .OrderBy(f => f.NameArabic)
                 .Select(f => new FacultyResponseDto
                 {
@@ -520,7 +548,6 @@ namespace BawabaUNI.Controllers.User
                     Description = f.Description,
                     StudentsNumber = f.StudentsNumber,
                     DurationOfStudy = f.DurationOfStudy,
-                    Specializations = f.Specializations,
                     UniversityNameArabic = f.University.NameArabic,
                     UniversityLocation = f.University.Location
                 })

@@ -1,6 +1,7 @@
 ﻿using BawabaUNI.Models.Data;
 using BawabaUNI.Models.DTOs;
 using BawabaUNI.Models.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,8 @@ namespace BawabaUNI.Controllers
 {
     [ApiController]
     [Route("api/Admin/[controller]")]
+    [Authorize(Roles = "Admin")]
+
     public class FacultiesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -48,7 +51,6 @@ namespace BawabaUNI.Controllers
                     StudentsNumber = model.StudentsNumber,
                     DurationOfStudy = model.DurationOfStudy ?? "4 سنوات",
                     ProgramsNumber = model.ProgramsNumber,
-                    Specializations = model.Specializations ?? "لا يوجد",
                     RequireAcceptanceTests = model.RequireAcceptanceTests,
                     UniversityId = universityId
                 };
@@ -421,7 +423,6 @@ namespace BawabaUNI.Controllers
                         f.StudentsNumber,
                         f.DurationOfStudy,
                         f.ProgramsNumber,
-                        f.Specializations,
                         f.RequireAcceptanceTests,
                         f.UniversityId,
 
@@ -432,12 +433,10 @@ namespace BawabaUNI.Controllers
 
                         // بيانات إضافية مختصرة
                         FirstTwoSpecializations = f.SpecializationList
-                            .Take(2)
                             .Select(s => new { s.Id, s.Name })
                             .ToList(),
 
                         FirstThreeJobs = f.JobOpportunities
-                            .Take(3)
                             .Select(j => new { j.Id, j.Name })
                             .ToList(),
 
@@ -584,7 +583,6 @@ namespace BawabaUNI.Controllers
                         f.StudentsNumber,
                         f.DurationOfStudy,
                         f.ProgramsNumber,
-                        f.Specializations,
                         f.RequireAcceptanceTests,
 
                         SpecializationsCount = f.SpecializationList.Count,
@@ -806,7 +804,6 @@ namespace BawabaUNI.Controllers
                                 f.DurationOfStudy,
                                 f.ProgramsNumber,
                                 f.Rank,
-                                f.Specializations,
                                 f.RequireAcceptanceTests,
                                
                                 f.CreatedAt,
@@ -1231,7 +1228,6 @@ namespace BawabaUNI.Controllers
                 faculty.StudentsNumber = model.StudentsNumber;
                 faculty.DurationOfStudy = !string.IsNullOrEmpty(model.DurationOfStudy) ? model.DurationOfStudy : "4 سنوات";
                 faculty.ProgramsNumber = model.ProgramsNumber;
-                faculty.Specializations = !string.IsNullOrEmpty(model.Specializations) ? model.Specializations : "لا يوجد";
                 faculty.RequireAcceptanceTests = model.RequireAcceptanceTests;
                 faculty.UpdatedAt = DateTime.UtcNow;
 
@@ -1712,13 +1708,11 @@ namespace BawabaUNI.Controllers
                                 f.DurationOfStudy,
                                 f.ProgramsNumber,
                                 f.Rank,
-                                f.Specializations,
                                 f.RequireAcceptanceTests,
                               
                                 f.CreatedAt,
 
                                 // 🔹 معلومات موجزة عن التخصصات
-                                SpecializationsString = f.Specializations, // هذا string
                                 SpecializationsList = f.SpecializationList
                                  .Where(s => !s.IsDeleted)
                                  .Take(3)

@@ -14,7 +14,6 @@ using System.ComponentModel.DataAnnotations;
         [Required] public int? ProgramsNumber { get; set; }
         [Required] public string DurationOfStudy { get; set; } = string.Empty;
         [Required] public int? StudentsNumber { get; set; }
-        public string Specializations { get; set; } = string.Empty;
         public bool RequireAcceptanceTests { get; set; }
 
         // ============================================

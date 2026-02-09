@@ -16,6 +16,8 @@ namespace BawabaUNI.Controllers.Admin
 {
     [Route("api/Admin/admin/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Admin")]
+
     public class GeneralController : ControllerBase
     {
         private readonly AppDbContext _context;

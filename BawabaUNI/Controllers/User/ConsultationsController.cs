@@ -271,8 +271,7 @@ namespace BawabaUNI.Controllers.User
                             Status = cr.Status,
                            
                             CreatedAt = cr.CreatedAt,
-                            AssignedAt = cr.AssignedAt,
-                            CompletedAt = cr.CompletedAt,
+                           
                             IsPaid = cr.IsPaid,
                             PaymentReference = cr.PaymentReference,
 
@@ -341,8 +340,7 @@ namespace BawabaUNI.Controllers.User
                             Status = cr.Status,
                          
                             CreatedAt = cr.CreatedAt,
-                            AssignedAt = cr.AssignedAt,
-                            CompletedAt = cr.CompletedAt,
+                            
                             IsPaid = cr.IsPaid,
                             PaymentReference = cr.PaymentReference,
 

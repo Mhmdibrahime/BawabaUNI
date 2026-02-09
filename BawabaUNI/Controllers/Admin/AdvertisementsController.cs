@@ -1,6 +1,7 @@
 ﻿using BawabaUNI.Models.Data;
 using BawabaUNI.Models.DTOs.Admin.AdvertisementsDTOs;
 using BawabaUNI.Models.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,8 @@ namespace BawabaUNI.Controllers.Admin
 {
     [Route("api/Admin/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Admin")]
+
     public class AdvertisementsController : ControllerBase
     {
         private readonly AppDbContext _context;

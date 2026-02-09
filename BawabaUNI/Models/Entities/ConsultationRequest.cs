@@ -31,14 +31,11 @@ namespace BawabaUNI.Models.Entities
 
        
 
-        public DateTime? AssignedAt { get; set; }
-        public DateTime? CompletedAt { get; set; }
 
         // Foreign Key للطالب (اختياري - إذا كان مسجلاً)
         public int? StudentId { get; set; }
 
-        // Foreign Key للموظف المسؤول (إذا تم التعيين)
-        public string? AssignedToUserId { get; set; }
+       
 
  
 
@@ -53,9 +50,8 @@ namespace BawabaUNI.Models.Entities
 
         // Navigation properties
         [ForeignKey("StudentId")]
-        public virtual Student Student { get; set; }
+        public virtual Student? Student { get; set; }
 
-        [ForeignKey("AssignedToUserId")]
-        public virtual ApplicationUser AssignedTo { get; set; }
+       
     }
 }

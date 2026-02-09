@@ -1,20 +1,23 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using BawabaUNI.Models.Data;
+using BawabaUNI.Models.DTOs.Admin.CoursesDTOs;
+using BawabaUNI.Models.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using BawabaUNI.Models.Data;
-using BawabaUNI.Models.Entities;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
-using BawabaUNI.Models.DTOs.Admin.CoursesDTOs;
 
 namespace BawabaUNI.Controllers.Admin
 {
     [Route("api/Admin/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Admin")]
+
     public class CoursesController : ControllerBase
     {
         private readonly AppDbContext _context;

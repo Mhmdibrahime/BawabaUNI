@@ -1,5 +1,6 @@
 ﻿using BawabaUNI.Models.Data;
 using BawabaUNI.Models.DTOs.User;
+using BawabaUNI.Models.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -81,7 +82,7 @@ namespace BawabaUNI.Controllers.User
         {
             var articles = await _context.Articles
                 .Where(u => !u.IsDeleted)
-                .Where(a => a.Date <= DateTime.Now)
+                .Where(a => a.Date <= DateTime.UtcNow)
                 .OrderByDescending(a => a.Date)
                 .Take(count)
                 .Select(a => new ArticleImageDto
@@ -516,9 +517,38 @@ namespace BawabaUNI.Controllers.User
             });
         }
 
-        
 
-        
+        [HttpGet("Statistics")]
+        public async Task<IActionResult> GetStatistics()
+        {
+            var stats = new
+            {
+                TotalUniversities = await _context.Universities.Where(a => !a.IsDeleted).CountAsync(),
+                TotalFaculties = await _context.Faculties.Where(a => !a.IsDeleted).CountAsync(),
+                TotalSpecializations = await _context.Specializations.Where(a => !a.IsDeleted).CountAsync(),
+                NumberOfVisits = await _context.Visits.Select(v => v.NumberOfVisits).FirstOrDefaultAsync()
+
+            };
+
+            return Ok(stats);
+        }
+        [HttpPost("visits/increment")]
+        public async Task<IActionResult> IncrementVisits()
+        {
+            var visit = await _context.Visits.FirstOrDefaultAsync();
+            if (visit == null)
+            {
+                visit = new Visits { NumberOfVisits = 1 };
+                _context.Visits.Add(visit);
+            }
+            else
+            {
+                visit.NumberOfVisits += 1;
+            }
+            await _context.SaveChangesAsync();
+            return Ok(new { Message = "Visit count incremented", CurrentCount = visit.NumberOfVisits });
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetAllPartners()
         {

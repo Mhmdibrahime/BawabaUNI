@@ -2,6 +2,8 @@
 {
     public class UniversitySimpleDto
     {
+        public int Id { get; set; }
+        public string Type { get; set; } = string.Empty;
         public string NameArabic { get; set; } = string.Empty;
         public string NameEnglish { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
@@ -13,6 +15,8 @@
         public string City { get; set; } = string.Empty;
         public string Governate { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;
+        public bool IsTrending { get; set; } 
+        public string ImageUrl { get; set; } = string.Empty;    
     }
 
     public class PagedResult<T>

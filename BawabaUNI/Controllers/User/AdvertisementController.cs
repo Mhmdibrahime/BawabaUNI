@@ -45,7 +45,7 @@ namespace BawabaUNI.Controllers.User
                 // فلترة الأساسية: الإعلانات النشطة فقط
                 var query = _context.Advertisements
                     .Where(u => !u.IsDeleted)
-                    .Where(a => a.Status == "Active" && a.Status == "نشط");
+                    .Where(a => a.Status == "Active" || a.Status == "نشط");
 
                 // تطبيق السيرش إذا موجود
                 if (!string.IsNullOrWhiteSpace(search))

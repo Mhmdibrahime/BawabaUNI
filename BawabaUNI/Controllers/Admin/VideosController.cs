@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using BawabaUNI.Models.Data;
+using BawabaUNI.Models.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using BawabaUNI.Models.Data;
-using BawabaUNI.Models.Entities;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,12 +15,13 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
 
 namespace BawabaUNI.Controllers.Admin
 {
     [Route("api/Admin/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Admin")]
+
     public class VideosController : ControllerBase
     {
         private readonly AppDbContext _context;

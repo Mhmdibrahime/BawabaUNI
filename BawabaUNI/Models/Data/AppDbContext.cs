@@ -17,6 +17,7 @@ namespace BawabaUNI.Models.Data
         }
 
         // DbSets with updated names
+        public DbSet<Visits> Visits { get; set; }
         public DbSet<HeroImage> HeroImages { get; set; }
         public DbSet<Partner> Partners { get; set; }
         public DbSet<University> Universities { get; set; }

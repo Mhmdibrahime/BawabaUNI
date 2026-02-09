@@ -31,8 +31,6 @@ namespace BawabaUNI.Models.Entities
         [Range(1, int.MaxValue)]
         public int? Rank { get; set; }
 
-        [MaxLength(1000)]
-        public string Specializations { get; set; }
 
         [Required]
         public bool RequireAcceptanceTests { get; set; }

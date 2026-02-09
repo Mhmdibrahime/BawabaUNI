@@ -11,6 +11,7 @@ namespace BawabaUNI.Controllers.Admin
 {
     [Route("api/Admin/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Admin")]
     public class UniversityController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -689,6 +690,8 @@ namespace BawabaUNI.Controllers.Admin
                 .Take(pageSize)
                 .Select(u => new UniversitySimpleDto
                 {
+                    Id = u.Id,
+                    Type = u.Type,
                     NameArabic = u.NameArabic,
                     NameEnglish = u.NameEnglish,
                     Description = u.Description,
@@ -703,7 +706,9 @@ namespace BawabaUNI.Controllers.Admin
                     Location = u.Location,
                     City = u.City,
                     Governate = u.Governate,
-                    Address = u.Address
+                    Address = u.Address,
+                    IsTrending = u.IsTrending,
+                    ImageUrl = u.UniversityImage
                 })
                 .ToListAsync();
 
