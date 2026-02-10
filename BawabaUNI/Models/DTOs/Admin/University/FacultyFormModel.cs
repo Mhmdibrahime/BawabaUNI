@@ -5,59 +5,51 @@ using System.ComponentModel.DataAnnotations;
     {
     public class FacultyFormModel
     {
-        // ============================================
-        // 📌 الخطوة 1: نظرة عامة
-        // ============================================
-        [Required] public string NameArabic { get; set; } = string.Empty;
-        public string NameEnglish { get; set; } = string.Empty;
-        [Required] public string Description { get; set; } = string.Empty;
-        [Required] public int? ProgramsNumber { get; set; }
-        [Required] public string DurationOfStudy { get; set; } = string.Empty;
-        [Required] public int? StudentsNumber { get; set; }
+        // البيانات الأساسية
+        public string NameArabic { get; set; }
+        public string? NameEnglish { get; set; }
+        public string Description { get; set; }
+        public int ProgramsNumber { get; set; }
+        public string DurationOfStudy { get; set; }
+        public int StudentsNumber { get; set; }
         public bool RequireAcceptanceTests { get; set; }
 
-        // ============================================
-        // 📌 الخطوة 2: التخصصات
-        // ============================================
-        public List<string> SpecializationNames { get; set; } = new();
-        public List<int> SpecializationYearsNumbers { get; set; } = new();
-        public List<string> SpecializationDescriptions { get; set; } = new();
+        // التخصصات
+        public List<string>? SpecializationNames { get; set; }
+        public List<int>? SpecializationYearsNumbers { get; set; }
+        public List<string>? SpecializationDescriptions { get; set; }
 
-        // ============================================
-        // 📌 الخطوة 3: خطة الدراسة (نظام جديد مبسط)
-        // ============================================
+        // السنوات الدراسية
+        public List<string> YearNames { get; set; }
+        public List<bool> YearHasSpecialization { get; set; }
 
-        // 🔸 السنوات الدراسية (مثل: العام الدراسي 1)
-        public List<string> YearNames { get; set; } = new(); // "العام الدراسي 1"
-        public List<bool> YearHasSpecialization { get; set; } = new(); // true = عام تخصص
+        // الفصول الدراسية
+        public List<string> SemesterNames { get; set; }
+        public List<int> SemesterYearIndices { get; set; }
 
-        // 🔸 الفصول الدراسية لكل سنة
-        public List<string> SemesterNames { get; set; } = new(); // "الفصل الدراسي 1"
-        public List<int> SemesterYearIndices { get; set; } = new(); // أي سنة ينتمي لها الفصل
+        // مواد الفصول (بدون أقسام)
+        public List<string>? SemesterMaterialNames { get; set; }
+        public List<int>? SemesterMaterialSemesterIndices { get; set; }
+        public List<string>? SemesterMaterialCodes { get; set; }
 
-        public List<string> SemesterMaterialNames { get; set; } = new();
-        public List<int> SemesterMaterialSemesterIndices { get; set; } = new();
-        public List<string> SemesterMaterialCodes { get; set; } = new(); // ⬅️ جديد
+        // الأقسام (الآن تابعة للسنة)
+        public List<string>? SectionNames { get; set; }
+        public List<int>? SectionYearIndices { get; set; } // تغيير من SectionSemesterIndices
+        public List<string>? SectionCodes { get; set; }
 
-        // 🔸 أقسام الفصول - مع الكود
-        public List<string> SectionNames { get; set; } = new();
-        public List<int> SectionSemesterIndices { get; set; } = new();
-        public List<string> SectionCodes { get; set; } = new(); // ⬅️ جديد
+        // مواد الأقسام مع تحديد الفصل
+        public List<string>? SectionMaterialNames { get; set; }
+        public List<int>? SectionMaterialSectionIndices { get; set; }
+        public List<int>? SectionMaterialSemesterIndices { get; set; } // جديد
+        public List<string>? SectionMaterialCodes { get; set; }
 
-        // 🔸 مواد الأقسام - مع الكود
-        public List<string> SectionMaterialNames { get; set; } = new();
-        public List<int> SectionMaterialSectionIndices { get; set; } = new();
-        public List<string> SectionMaterialCodes { get; set; } = new(); // ⬅️ جديد
+        // الوسائط
+        public List<string>? MediaTypes { get; set; }
+        public List<IFormFile>? MediaFiles { get; set; }
+        public List<int>? MediaYearIndices { get; set; }
 
-        // 🔸 وسائط لكل سنة
-        public List<string> MediaTypes { get; set; } = new();
-        public List<IFormFile> MediaFiles { get; set; } = new();
-        public List<int> MediaYearIndices { get; set; } = new(); // أي سنة مرتبطة به الوسائط
-
-        // ============================================
-        // 📌 الخطوة 4: فرص العمل
-        // ============================================
-        public List<string> JobOpportunityNames { get; set; } = new();
-        public List<string> JobOpportunityDescriptions { get; set; } = new();
+        // فرص العمل
+        public List<string>? JobOpportunityNames { get; set; }
+        public List<string>? JobOpportunityDescriptions { get; set; }
     }
 }
