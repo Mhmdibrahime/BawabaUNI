@@ -20,6 +20,7 @@ namespace BawabaUNI.Models.Data
         public DbSet<Visits> Visits { get; set; }
         public DbSet<HeroImage> HeroImages { get; set; }
         public DbSet<Partner> Partners { get; set; }
+        public DbSet<FooterAdvertisement> FooterAdvertisements { get; set; }
         public DbSet<University> Universities { get; set; }
         public DbSet<DocumentRequired> DocumentsRequired { get; set; }
         public DbSet<HousingOption> HousingOptions { get; set; }
@@ -34,6 +35,7 @@ namespace BawabaUNI.Models.Data
         public DbSet<CourseFeedback> CourseFeedbacks { get; set; }
         public DbSet<LessonLearned> LessonsLearned { get; set; }
         public DbSet<Video> Videos { get; set; }
+        public DbSet<VideoAttachment> VideoAttachments { get; set; }
         public DbSet<Article> Articles { get; set; }
         public DbSet<Advertisement> Advertisements { get; set; }
         public DbSet<Student> Students { get; set; }
@@ -148,8 +150,7 @@ namespace BawabaUNI.Models.Data
 
             // Unique constraints (updated for new entities)
             modelBuilder.Entity<University>()
-                .HasIndex(u => u.NameEnglish)
-                .IsUnique();
+                .HasIndex(u => u.NameEnglish);
 
             modelBuilder.Entity<University>()
                 .HasIndex(u => u.Email)
@@ -157,8 +158,7 @@ namespace BawabaUNI.Models.Data
                 .HasFilter("[Email] IS NOT NULL");
 
             modelBuilder.Entity<Faculty>()
-                .HasIndex(f => new { f.NameEnglish, f.UniversityId })
-                .IsUnique();
+                .HasIndex(f => new { f.NameEnglish, f.UniversityId });
 
             // Each faculty should have unique study plan year numbers
             modelBuilder.Entity<StudyPlanYear>()
@@ -170,12 +170,10 @@ namespace BawabaUNI.Models.Data
                 .IsUnique();
 
             modelBuilder.Entity<Course>()
-                .HasIndex(c => c.NameEnglish)
-                .IsUnique();
+                .HasIndex(c => c.NameEnglish);
 
             modelBuilder.Entity<AcademicMaterial>()
-                .HasIndex(a => a.Code)
-                .IsUnique();
+                .HasIndex(a => a.Code);
 
             modelBuilder.Entity<Student>()
                 .HasIndex(s => s.ApplicationUserId)
@@ -183,8 +181,7 @@ namespace BawabaUNI.Models.Data
 
             // Additional indexes for study plan sections
             modelBuilder.Entity<StudyPlanSection>()
-                .HasIndex(s => new { s.StudyPlanYearId, s.Name })
-                .IsUnique();
+                .HasIndex(s => new { s.StudyPlanYearId, s.Name });
 
             // Configure decimal precision
             modelBuilder.Entity<Course>()

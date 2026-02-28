@@ -32,22 +32,22 @@ namespace BawabaUNI.Controllers.Admin
                 var lastDayOfPreviousMonth = firstDayOfMonth.AddDays(-1);
 
                 // 1. Total Universities
-                var totalUniversities = await _context.Universities.CountAsync();
+                var totalUniversities = await _context.Universities.Where(u=>!u.IsDeleted).CountAsync();
               
                 // 2. Total Faculties
-                var totalFaculties = await _context.Faculties.CountAsync();
+                var totalFaculties = await _context.Faculties.Where(f=>!f.IsDeleted).CountAsync();
                
                 // 3. Total Courses
-                var totalCourses = await _context.Courses.CountAsync();
+                var totalCourses = await _context.Courses.Where(f => !f.IsDeleted).CountAsync();
                 var previousMonthCourses = await _context.Courses
-                    .Where(c => c.CreatedAt >= firstDayOfPreviousMonth && c.CreatedAt < firstDayOfMonth)
+                    .Where(c => c.CreatedAt >= firstDayOfPreviousMonth && c.CreatedAt < firstDayOfMonth && !c.IsDeleted)
                     .CountAsync();
                 var coursesGrowth = CalculateGrowthPercentage(previousMonthCourses, totalCourses);
 
                 // 4. Total Advertisements
-                var totalAdvertisements = await _context.Advertisements.CountAsync();
+                var totalAdvertisements = await _context.Advertisements.Where(f => !f.IsDeleted).CountAsync();
                 var previousMonthAdvertisements = await _context.Advertisements
-                    .Where(a => a.CreatedAt >= firstDayOfPreviousMonth && a.CreatedAt < firstDayOfMonth)
+                    .Where(a => a.CreatedAt >= firstDayOfPreviousMonth && a.CreatedAt < firstDayOfMonth && !a.IsDeleted)
                     .CountAsync();
                 var advertisementsGrowth = CalculateGrowthPercentage(previousMonthAdvertisements, totalAdvertisements);
 

@@ -266,7 +266,7 @@ namespace BawabaUNI.Controllers.Admin
                     });
                 }
 
-                // 2. تحديث بيانات الجامعة
+                // 2. تحديث بيانات الجامعة (كما هي)
                 university.Type = request.Type;
                 university.NameArabic = request.NameArabic;
                 university.NameEnglish = request.NameEnglish;
@@ -286,7 +286,7 @@ namespace BawabaUNI.Controllers.Admin
                 university.PostalCode = request.PostalCode;
                 university.UpdatedAt = DateTime.UtcNow;
 
-                // 3. تحديث صورة الجامعة إذا أرسلت
+                // 3. تحديث صورة الجامعة (كما هي)
                 if (request.UniversityImage != null && request.UniversityImage.Length > 0)
                 {
                     var newImagePath = await SaveFile(request.UniversityImage, "universities");
@@ -299,22 +299,27 @@ namespace BawabaUNI.Controllers.Admin
 
                 await _context.SaveChangesAsync();
 
-                // 4. التعامل مع السكن
+                // 4. التعامل مع السكن - ✅ التعديل هنا
                 var housingCount = 0;
-                if (request.HousingNames != null && request.HousingNames.Any())
+
+                // 4.1 حذف السكن المحدد من قبل المستخدم
+                if (request.DeletedHousingIds != null && request.DeletedHousingIds.Any())
                 {
-                    // حذف السكن القديم
-                    var existingHousing = await _context.HousingOptions
-                        .Where(h => h.UniversityId == id)
+                    var housingToDelete = await _context.HousingOptions
+                        .Where(h => h.UniversityId == id && request.DeletedHousingIds.Contains(h.Id))
                         .ToListAsync();
 
-                    foreach (var housing in existingHousing)
+                    foreach (var housing in housingToDelete)
                     {
                         DeleteOldFile(housing.ImagePath);
                     }
-                    _context.HousingOptions.RemoveRange(existingHousing);
+                    _context.HousingOptions.RemoveRange(housingToDelete);
+                    await _context.SaveChangesAsync();
+                }
 
-                    // إضافة السكن الجديد
+                // 4.2 إضافة/تحديث السكن
+                if (request.HousingNames != null && request.HousingNames.Any())
+                {
                     for (int i = 0; i < request.HousingNames.Count; i++)
                     {
                         if (string.IsNullOrEmpty(request.HousingNames[i]))
@@ -343,17 +348,23 @@ namespace BawabaUNI.Controllers.Admin
                     }
                 }
 
-                // 5. التعامل مع المستندات
+                // 5. التعامل مع المستندات - ✅ نفس المنطق
                 var documentCount = 0;
+
+                // 5.1 حذف المستندات المحددة من قبل المستخدم
+                if (request.DeletedDocumentIds != null && request.DeletedDocumentIds.Any())
+                {
+                    var documentsToDelete = await _context.DocumentsRequired
+                        .Where(d => d.UniversityId == id && request.DeletedDocumentIds.Contains(d.Id))
+                        .ToListAsync();
+
+                    _context.DocumentsRequired.RemoveRange(documentsToDelete);
+                    await _context.SaveChangesAsync();
+                }
+
+                // 5.2 إضافة المستندات الجديدة
                 if (request.DocumentNames != null && request.DocumentNames.Any())
                 {
-                    // حذف المستندات القديمة
-                    var existingDocuments = await _context.DocumentsRequired
-                        .Where(d => d.UniversityId == id)
-                        .ToListAsync();
-                    _context.DocumentsRequired.RemoveRange(existingDocuments);
-
-                    // إضافة المستندات الجديدة
                     for (int i = 0; i < request.DocumentNames.Count; i++)
                     {
                         if (string.IsNullOrEmpty(request.DocumentNames[i]))
@@ -382,13 +393,14 @@ namespace BawabaUNI.Controllers.Admin
                     message = "تم تحديث الجامعة بنجاح",
                     universityId = id,
                     housingCount,
-                    documentCount
+                    documentCount,
+                    deletedHousingCount = request.DeletedHousingIds?.Count ?? 0,
+                    deletedDocumentCount = request.DeletedDocumentIds?.Count ?? 0
                 });
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-
                 return StatusCode(500, new
                 {
                     success = false,
@@ -429,10 +441,14 @@ namespace BawabaUNI.Controllers.Admin
             public List<string>? HousingPhones { get; set; }
             public List<string>? HousingDescriptions { get; set; }
             public List<IFormFile>? HousingImages { get; set; }
+            public List<int>? DeletedHousingIds { get; set; }  // ✅ IDs السكن المحذوف
+
 
             // المستندات (arrays) - ستستبدل القديم بالجديد
             public List<string>? DocumentNames { get; set; }
             public List<string>? DocumentDescriptions { get; set; }
+            public List<int>? DeletedDocumentIds { get; set; }  // ✅ IDs المستندات المحذوفة
+
         }
 
         private void DeleteOldFile(string filePath)
@@ -771,7 +787,7 @@ namespace BawabaUNI.Controllers.Admin
                     PostalCode = university.PostalCode,
                     CreatedAt = university.CreatedAt,
 
-                    HousingOptions = university.HousingOptions.Select(h => new HousingOptionDto
+                    HousingOptions = university.HousingOptions.Where(h=>!h.IsDeleted).Select(h => new HousingOptionDto
                     {
                         Id = h.Id,
                         Name = h.Name,
@@ -783,7 +799,7 @@ namespace BawabaUNI.Controllers.Admin
                         CreatedAt = h.CreatedAt
                     }).ToList(),
 
-                    DocumentsRequired = university.DocumentsRequired.Select(d => new DocumentRequiredDto
+                    DocumentsRequired = university.DocumentsRequired.Where(h => !h.IsDeleted).Select(d => new DocumentRequiredDto
                     {
                         Id = d.Id,
                         DocumentName = d.DocumentName,
@@ -791,7 +807,7 @@ namespace BawabaUNI.Controllers.Admin
                         CreatedAt = d.CreatedAt
                     }).ToList(),
 
-                    Faculties = university.Faculties.Select(f => new FacultySimpleDto
+                    Faculties = university.Faculties.Where(h => !h.IsDeleted).Select(f => new FacultySimpleDto
                     {
                         Id = f.Id,
                         NameArabic = f.NameArabic,

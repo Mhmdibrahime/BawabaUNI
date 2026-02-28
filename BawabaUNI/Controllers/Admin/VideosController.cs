@@ -28,12 +28,19 @@ namespace BawabaUNI.Controllers.Admin
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _environment;
         private readonly HttpClient _httpClient;
+        private readonly IWebHostEnvironment _env;
 
-        public VideosController(AppDbContext context, IConfiguration configuration)
+
+        public VideosController(
+
+            AppDbContext context,
+            IConfiguration configuration,
+            IWebHostEnvironment env)
         {
             _context = context;
             _configuration = configuration;
             _httpClient = new HttpClient();
+            _env = env;
 
             // Configure Vimeo API
             var accessToken = _configuration["Vimeo:AccessToken"];
@@ -950,7 +957,339 @@ namespace BawabaUNI.Controllers.Admin
                 }
             });
         }
+        // POST: api/Admin/Videos/{videoId}/attachments
+        [HttpPost("{videoId}/attachments")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<object>> AddVideoAttachments(int videoId, [FromForm] List<IFormFile> files)
+        {
+            try
+            {
+                // 1. Check if video exists
+                var video = await _context.Videos
+                    .Where(v => v.Id == videoId && !v.IsDeleted)
+                    .FirstOrDefaultAsync();
 
+                if (video == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "الفيديو غير موجود"
+                    });
+                }
+
+                // 2. Validate files
+                if (files == null || files.Count == 0)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "يرجى رفع ملف واحد على الأقل"
+                    });
+                }
+
+                // 3. Check current attachments count
+                var currentAttachmentsCount = await _context.VideoAttachments
+                    .CountAsync(a => a.VideoId == videoId && !a.IsDeleted);
+
+                if (currentAttachmentsCount + files.Count > 3)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = $"لا يمكن إضافة أكثر من 3 ملفات للفيديو. الملفات الحالية: {currentAttachmentsCount}, الملفات المضافة: {files.Count}",
+                        currentCount = currentAttachmentsCount,
+                        maxAllowed = 3,
+                        remainingSlots = 3 - currentAttachmentsCount
+                    });
+                }
+
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".pdf" };
+                var maxFileSize = 15 * 1024 * 1024; // 15MB in bytes
+                var uploadedAttachments = new List<object>();
+                var errors = new List<string>();
+
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        // Validate file
+                        var extension = Path.GetExtension(file.FileName).ToLower();
+
+                        if (!allowedExtensions.Contains(extension))
+                        {
+                            errors.Add($"الملف {file.FileName}: صيغة غير مدعومة. الصيغ المسموحة: JPG, PNG, PDF");
+                            continue;
+                        }
+
+                        if (file.Length > maxFileSize)
+                        {
+                            errors.Add($"الملف {file.FileName}: حجم الملف يتجاوز 15 ميجابايت");
+                            continue;
+                        }
+
+                        if (file.Length == 0)
+                        {
+                            errors.Add($"الملف {file.FileName}: الملف فارغ");
+                            continue;
+                        }
+
+                        // Determine file type
+                        string fileType = extension == ".pdf" ? "pdf" : "image";
+
+                        // Save file
+                        string folder = fileType == "pdf" ? "video-pdfs" : "video-images";
+                        string fileUrl = await SaveFile(file, folder);
+
+                        if (string.IsNullOrEmpty(fileUrl))
+                        {
+                            errors.Add($"الملف {file.FileName}: فشل في رفع الملف");
+                            continue;
+                        }
+
+                        // Create attachment record
+                        var attachment = new VideoAttachment
+                        {
+                            FileName = file.FileName,
+                            FileType = fileType,
+                            FileUrl = fileUrl,
+                            
+                            VideoId = videoId,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        _context.VideoAttachments.Add(attachment);
+                        await _context.SaveChangesAsync();
+
+                        uploadedAttachments.Add(new
+                        {
+                            attachment.Id,
+                            attachment.FileName,
+                            attachment.FileType,
+                            attachment.FileUrl,
+                           
+                            attachment.CreatedAt
+                        });
+
+                        Console.WriteLine($"✅ تم رفع ملف: {file.FileName} للفيديو {videoId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"الملف {file.FileName}: خطأ - {ex.Message}");
+                    }
+                }
+
+                // Get updated count
+                var newTotalCount = await _context.VideoAttachments
+                    .CountAsync(a => a.VideoId == videoId && !a.IsDeleted);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = $"تم رفع {uploadedAttachments.Count} ملف بنجاح",
+                    videoId,
+                    videoTitle = video.Title,
+                    uploadedCount = uploadedAttachments.Count,
+                    failedCount = errors.Count,
+                    currentTotalAttachments = newTotalCount,
+                    maxAllowed = 3,
+                    remainingSlots = 3 - newTotalCount,
+                    attachments = uploadedAttachments,
+                    errors = errors.Count > 0 ? errors : null
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ خطأ في رفع المرفقات: {ex.Message}");
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "حدث خطأ أثناء رفع الملفات",
+                    error = ex.Message
+                });
+            }
+        }
+
+        // GET: api/Admin/Videos/{videoId}/attachments
+        [HttpGet("{videoId}/attachments")]
+        public async Task<ActionResult<object>> GetVideoAttachments(int videoId)
+        {
+            try
+            {
+                var video = await _context.Videos
+                    .Where(v => v.Id == videoId && !v.IsDeleted)
+                    .Select(v => new { v.Id, v.Title })
+                    .FirstOrDefaultAsync();
+
+                if (video == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "الفيديو غير موجود"
+                    });
+                }
+
+                var attachments = await _context.VideoAttachments
+                    .Where(a => a.VideoId == videoId && !a.IsDeleted)
+                    .OrderByDescending(a => a.CreatedAt)
+                    .Select(a => new
+                    {
+                        a.Id,
+                        a.FileName,
+                        a.FileType,
+                        a.FileUrl,
+                       
+                        a.CreatedAt
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    videoId = video.Id,
+                    videoTitle = video.Title,
+                    totalCount = attachments.Count,
+                    maxAllowed = 3,
+                    remainingSlots = 3 - attachments.Count,
+                    attachments = attachments
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "حدث خطأ أثناء جلب المرفقات",
+                    error = ex.Message
+                });
+            }
+        }
+
+        // DELETE: api/Admin/Videos/attachments/{attachmentId}
+        [HttpDelete("attachments/{attachmentId}")]
+        public async Task<IActionResult> DeleteVideoAttachment(int attachmentId)
+        {
+            try
+            {
+                var attachment = await _context.VideoAttachments
+                    .Where(a => a.Id == attachmentId && !a.IsDeleted)
+                    .FirstOrDefaultAsync();
+
+                if (attachment == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "الملف غير موجود"
+                    });
+                }
+
+                // Delete physical file
+                await DeleteFile(attachment.FileUrl);
+
+                // Soft delete
+                attachment.IsDeleted = true;
+                attachment.DeletedAt = DateTime.UtcNow;
+                attachment.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "تم حذف الملف بنجاح",
+                    attachmentId,
+                    fileName = attachment.FileName
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "حدث خطأ أثناء حذف الملف",
+                    error = ex.Message
+                });
+            }
+        }
+
+        // Helper method to format file size
+        private string FormatFileSize(long bytes)
+        {
+            string[] sizes = { "B", "KB", "MB", "GB" };
+            double len = bytes;
+            int order = 0;
+            while (len >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                len = len / 1024;
+            }
+            return $"{len:0.##} {sizes[order]}";
+        }
+        private async Task<string> SaveFile(IFormFile file, string folder)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                    return null;
+
+                // Create upload directory if it doesn't exist
+                var uploadsPath = Path.Combine(_env.WebRootPath, "uploads", folder);
+                if (!Directory.Exists(uploadsPath))
+                {
+                    Directory.CreateDirectory(uploadsPath);
+                }
+
+                // Generate unique filename
+                var extension = Path.GetExtension(file.FileName);
+                var fileName = $"{Guid.NewGuid()}{extension}";
+                var filePath = Path.Combine(uploadsPath, fileName);
+
+                // Save file
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                // Return relative URL
+                return $"/uploads/{folder}/{fileName}";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving file: {ex.Message}");
+                return null;
+            }
+        }
+
+        private async Task<bool> DeleteFile(string fileUrl)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(fileUrl))
+                    return false;
+
+                // Convert URL to physical path
+                // Example: /uploads/folder/file.jpg -> wwwroot/uploads/folder/file.jpg
+                var fileName = Path.GetFileName(fileUrl);
+                var folder = fileUrl.Split('/')[2]; // Get folder name from URL
+                var filePath = Path.Combine(_env.WebRootPath, "uploads", folder, fileName);
+
+                // Delete file if exists
+                if (System.IO.File.Exists(filePath))
+                {
+                    System.IO.File.Delete(filePath);
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting file: {ex.Message}");
+                return false;
+            }
+        }
         public class VideoCreateRequest
         {
             public string Title { get; set; }

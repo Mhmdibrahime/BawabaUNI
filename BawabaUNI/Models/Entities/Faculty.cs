@@ -34,7 +34,19 @@ namespace BawabaUNI.Models.Entities
 
         [Required]
         public bool RequireAcceptanceTests { get; set; }
+        public int Expenses { get; set; }
+        public int Coordination  { get; set; }
 
+        [MaxLength(500)]
+        public string? GroupLink { get; set; }
+
+        [MaxLength(500)]
+        public string? Address { get; set; }
+
+        [MaxLength(500)]
+        public string? ImageUrl { get; set; }
+        [MaxLength(500)]
+        public string? DescriptionOfStudyPlan { get; set; }
         // Foreign Key
         public int UniversityId { get; set; }
 

@@ -183,8 +183,8 @@ namespace BawabaUNI.Controllers.User
                         Discount = c.Discount,
                         FinalPrice = c.Discount.HasValue ?
                             c.Price - (c.Price * c.Discount.Value / 100) : c.Price,
-                        LessonsNumber = c.LessonsNumber,
-                        HoursNumber = c.HoursNumber,
+                        LessonsNumber = c.Videos.Count,
+                        HoursNumber = c.Videos.Sum(v=>v.DurationInMinutes)/60,
                         PosterImage = c.PosterImage,
                         Classification = c.Classification,
                         InstructorName = c.InstructorName,
@@ -262,8 +262,8 @@ namespace BawabaUNI.Controllers.User
                         Discount = c.Discount,
                         FinalPrice = c.Discount.HasValue ?
                             c.Price - (c.Price * c.Discount.Value / 100) : c.Price,
-                        LessonsNumber = c.LessonsNumber,
-                        HoursNumber = c.HoursNumber,
+                        LessonsNumber = c.Videos.Count,
+                        HoursNumber = c.Videos.Sum(v => v.DurationInMinutes) / 60,
                         PosterImage = c.PosterImage,
                         Classification = c.Classification,
                         InstructorName = c.InstructorName,
@@ -593,6 +593,7 @@ namespace BawabaUNI.Controllers.User
         {
             try
             {
+
                 var user = await GetCurrentUser();
                 if (user == null)
                 {

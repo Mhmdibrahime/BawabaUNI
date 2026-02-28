@@ -1,6 +1,8 @@
-﻿using BawabaUNI.Models.Data;
+﻿using BawabaUNI.Controllers.Admin;
+using BawabaUNI.Models.Data;
 using BawabaUNI.Models.DTOs.User;
 using BawabaUNI.Models.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -54,6 +56,8 @@ namespace BawabaUNI.Controllers.User
             public string UniversityImage { get; set; }
             public int? GlobalRanking { get; set; }
             public string Location { get; set; }
+            public int NumberOfFaculties { get; set; }
+            public int NumberOfStudents { get; set; }
         }
 
         // 1. الحصول على الصور الرئيسية النشطة (Hero Images)
@@ -129,7 +133,7 @@ namespace BawabaUNI.Controllers.User
         [HttpGet("courses/featured")]
         public async Task<IActionResult> GetFeaturedCourseImages([FromQuery] int count = 6)
         {
-            var courses = await _context.Courses
+            var courses = await _context.Courses.Where(f => !f.IsDeleted)
                 .OrderByDescending(c => c.Discount.HasValue ? c.Discount.Value : 0)
                 .ThenByDescending(c => c.Id)
                 .Take(count)
@@ -182,6 +186,7 @@ namespace BawabaUNI.Controllers.User
         public async Task<IActionResult> GetTrendingUniversityImages([FromQuery] int count = 10)
         {
             var universities = await _context.Universities
+                .Include(u=> u.Faculties)
                 .Where(u => !u.IsDeleted)
                 .Where(u => u.IsTrending)
                 .OrderByDescending(u => u.GlobalRanking.HasValue ? u.GlobalRanking.Value : int.MaxValue)
@@ -195,7 +200,9 @@ namespace BawabaUNI.Controllers.User
                     Description = u.Description,
                     UniversityImage = u.UniversityImage,
                     GlobalRanking = u.GlobalRanking,
-                    Location = u.Location
+                    Location = u.Location,
+                    NumberOfFaculties = u.Faculties.Count,
+                    NumberOfStudents = u.StudentsNumber ?? 0
                 })
                 .ToListAsync();
 
@@ -240,7 +247,7 @@ namespace BawabaUNI.Controllers.User
                 .Take(3)
                 .ToListAsync();
 
-            var latestArticles = await _context.Articles
+            var latestArticles = await _context.Articles.Where(a => !a.IsDeleted)
                 .Where(a => a.Date <= DateTime.Now)
                 .OrderByDescending(a => a.Date)
                 .Take(3)
@@ -254,7 +261,7 @@ namespace BawabaUNI.Controllers.User
                 })
                 .ToListAsync();
 
-            var featuredCourses = await _context.Courses
+            var featuredCourses = await _context.Courses.Where(c => !c.IsDeleted)
                 .Where(c => c.Discount.HasValue && c.Discount > 0)
                 .OrderByDescending(c => c.Discount)
                 .Take(4)
@@ -268,7 +275,7 @@ namespace BawabaUNI.Controllers.User
                 })
                 .ToListAsync();
 
-            var trendingUniversities = await _context.Universities
+            var trendingUniversities = await _context.Universities.Where(u => !u.IsDeleted)
                 .Where(u => u.IsTrending)
                 .OrderBy(u => u.GlobalRanking)
                 .Take(6)
@@ -321,7 +328,7 @@ namespace BawabaUNI.Controllers.User
                 .Take(10)
                 .ToListAsync();
 
-            var courses = await _context.Courses
+            var courses = await _context.Courses.Where(c => !c.IsDeleted)
                 .Where(c => c.NameArabic.Contains(keyword) || c.NameEnglish.Contains(keyword) ||
                            c.Classification.Contains(keyword) || c.InstructorName.Contains(keyword))
                 .Select(c => new
@@ -336,7 +343,7 @@ namespace BawabaUNI.Controllers.User
                 .Take(10)
                 .ToListAsync();
 
-            var universities = await _context.Universities
+            var universities = await _context.Universities.Where(u => !u.IsDeleted)
                 .Where(u => u.NameArabic.Contains(keyword) || u.NameEnglish.Contains(keyword) ||
                            u.Type.Contains(keyword) || u.Location.Contains(keyword))
                 .Select(u => new
@@ -390,7 +397,7 @@ namespace BawabaUNI.Controllers.User
             try
             {
                 // فلترة الأساسية: الإعلانات النشطة فقط
-                var query = _context.Advertisements
+                var query = _context.Advertisements.Where(a=> !a.IsDeleted)
                     .Where(a => a.Status == "Active" && a.Status == "نشط");
 
                 // تطبيق السيرش إذا موجود
@@ -590,6 +597,39 @@ namespace BawabaUNI.Controllers.User
                 });
             }
         }
+        // GET: api/general/footer-advertisements/active
+        [HttpGet("footer-advertisements/active")]
+        public async Task<ActionResult<IEnumerable<FooterAdvertisementResponseDto>>> GetActiveFooterAdvertisements()
+        {
+            var now = DateTime.UtcNow;
+            var activeAds = await _context.FooterAdvertisements
+                .Where(x => !x.IsDeleted &&
+                           x.Status == "Active" &&
+                           (!x.StartDate.HasValue || x.StartDate.Value <= now) &&
+                           (!x.EndDate.HasValue || x.EndDate.Value >= now))
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync();
+
+            var result = activeAds.Select(ad => new FooterAdvertisementResponseDto
+            {
+                Id = ad.Id,
+                MobileImagePath = ad.MobileImagePath,
+                MobileImageUrl = $"{Request.Scheme}://{Request.Host}{ad.MobileImagePath}",
+                DesktopImagePath = ad.DesktobImagePath,
+                DesktopImageUrl = $"{Request.Scheme}://{Request.Host}{ad.DesktobImagePath}",
+                TabletImagePath = ad.TabletImagePath,
+                TabletImageUrl = $"{Request.Scheme}://{Request.Host}{ad.TabletImagePath}",
+                Link = ad.Link,
+                Status = ad.Status,
+                StartDate = ad.StartDate,
+                EndDate = ad.EndDate,
+                CreatedAt = ad.CreatedAt,
+                UpdatedAt = ad.UpdatedAt
+            }).ToList();
+
+            return Ok(result);
+        }
+
 
     }
 }

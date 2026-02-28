@@ -13,6 +13,17 @@ using System.ComponentModel.DataAnnotations;
         public string DurationOfStudy { get; set; }
         public int StudentsNumber { get; set; }
         public bool RequireAcceptanceTests { get; set; }
+        public int Expenses { get; set; }
+        public int Coordination { get; set; }
+
+        [MaxLength(500)]
+        public string? GroupLink { get; set; }
+        [MaxLength(500,ErrorMessage = "العنوان لا يجب ان يتخطى 500 حرف ")]
+        public string? Address { get; set; }
+
+        public IFormFile? Image { get; set; }
+        [MaxLength(500,ErrorMessage ="الوصف لا يجب ان يتخطى 500 حرف")]
+        public string? DescriptionOfStudyPlan { get; set; }
 
         // التخصصات
         public List<string>? SpecializationNames { get; set; }
@@ -45,6 +56,7 @@ using System.ComponentModel.DataAnnotations;
 
         // الوسائط
         public List<string>? MediaTypes { get; set; }
+        public List<string>? MediaVisitLinks { get; set; }
         public List<IFormFile>? MediaFiles { get; set; }
         public List<int>? MediaYearIndices { get; set; }
 

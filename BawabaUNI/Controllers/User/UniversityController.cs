@@ -282,12 +282,15 @@ namespace BawabaUNI.Controllers.User
                                 ImagePath = h.ImagePath
                             }).ToList() : new List<HousingOptionDto>(),
                         Faculties = u.Faculties != null ?
-                            u.Faculties.Select(f => new FacultyDto
+                            u.Faculties.Where(f => !f.IsDeleted).Select(f => new FacultyDto
                             {
                                 Id = f.Id,
                                 NameArabic = f.NameArabic,
                                 NameEnglish = f.NameEnglish,
-                                Description = f.Description
+                                Description = f.Description,
+                                Expenses = f.Expenses,
+                                Coordination = f.Coordination
+
                             }).ToList() : new List<FacultyDto>()
                     })
                     .FirstOrDefaultAsync();
@@ -481,6 +484,9 @@ namespace BawabaUNI.Controllers.User
             public string NameArabic { get; set; }
             public string NameEnglish { get; set; }
             public string Description { get; set; }
+            public int Expenses { get; set; }
+            public int Coordination { get; set; }
+
         }
     }
 }

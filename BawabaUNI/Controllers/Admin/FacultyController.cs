@@ -40,7 +40,16 @@ namespace BawabaUNI.Controllers
                     .AnyAsync(u => u.Id == universityId && !u.IsDeleted);
                 if (!universityExists)
                     return BadRequest(new { success = false, message = "الجامعة غير موجودة" });
-
+                var imageUrl = "";
+                if (model.Image != null)
+                {
+                    var imageLink = await SaveFile(model.Image, "faculty-images");
+                    if (!string.IsNullOrEmpty(imageLink))
+                    {
+                        imageUrl = imageLink;
+                        Console.WriteLine($"📁 تم رفع صورة الكلية: {imageLink}");
+                    }
+                }
                 // 3. إنشاء الكلية
                 var faculty = new Faculty
                 {
@@ -51,7 +60,13 @@ namespace BawabaUNI.Controllers
                     DurationOfStudy = model.DurationOfStudy ?? "4 سنوات",
                     ProgramsNumber = model.ProgramsNumber,
                     RequireAcceptanceTests = model.RequireAcceptanceTests,
-                    UniversityId = universityId
+                    UniversityId = universityId,
+                    Coordination = model.Coordination,
+                    Expenses = model.Expenses,
+                    GroupLink = model.GroupLink,
+                    DescriptionOfStudyPlan = model.DescriptionOfStudyPlan,
+                    Address = model.Address,
+                    ImageUrl = imageUrl
                 };
 
                 _context.Faculties.Add(faculty);
@@ -143,7 +158,7 @@ namespace BawabaUNI.Controllers
                                         {
                                             MediaType = model.MediaTypes[mediaIndex],
                                             MediaLink = mediaLink,
-                                            VisitLink = "",
+                                            VisitLink = model.MediaVisitLinks?[mediaIndex] ?? "",
                                             StudyPlanYearId = studyPlanYearId
                                         };
 
@@ -434,6 +449,9 @@ namespace BawabaUNI.Controllers
                         f.ProgramsNumber,
                         f.RequireAcceptanceTests,
                         f.UniversityId,
+                        f.Expenses,
+                        f.Coordination,
+                        f.GroupLink,
 
                         // إحصائيات
                         SpecializationsCount = f.SpecializationList.Count,
@@ -488,6 +506,62 @@ namespace BawabaUNI.Controllers
                 });
             }
         }
+
+        [HttpPut("{facultyId}/expenses-coordination")]
+        public async Task<IActionResult> UpdateExpensesAndCoordinationRequired(
+    int facultyId,
+    
+    [FromBody] UpdateExpensesCoordinationRequiredDto model)
+        {
+            try
+            {
+                // التحقق من صحة البيانات
+                if (model == null)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "يرجى إدخال المصروفات والتنسيق بشكل صحيح"
+                    });
+                }
+
+                var faculty = await _context.Faculties
+                    .FirstOrDefaultAsync(f => f.Id == facultyId  && !f.IsDeleted);
+
+                if (faculty == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "الكلية غير موجودة"
+                    });
+                }
+
+                faculty.Expenses = model.Expenses;
+                faculty.Coordination = model.Coordination;
+                faculty.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "تم تحديث المصروفات والتنسيق بنجاح",
+                    data = new
+                    {
+                        facultyId,
+                        facultyName = faculty.NameArabic,
+                        expenses = faculty.Expenses,
+                        coordination = faculty.Coordination
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
 
         // 📌 GET: api/faculties/university/{universityId}/search
         [HttpGet("university/{universityId}/search")]
@@ -593,7 +667,9 @@ namespace BawabaUNI.Controllers
                         f.DurationOfStudy,
                         f.ProgramsNumber,
                         f.RequireAcceptanceTests,
-
+                        f.Expenses,
+                        f.Coordination,
+                        f.GroupLink,
                         SpecializationsCount = f.SpecializationList.Count,
                         StudyYearsCount = f.StudyPlanYears.Count,
 
@@ -670,7 +746,7 @@ namespace BawabaUNI.Controllers
                     .GroupBy(f => 1) // تجميع جميع السجلات
                     .Select(g => new
                     {
-                        TotalFaculties = g.Count(),
+                        TotalFaculties = g.Where(f => !f.IsDeleted).Count(),
                         TotalStudents = g.Sum(f => f.StudentsNumber ?? 0),
                         TotalPrograms = g.Sum(f => f.ProgramsNumber ?? 0),
                         AverageDuration = g.Average(f =>
@@ -678,14 +754,15 @@ namespace BawabaUNI.Controllers
                             ? int.Parse(f.DurationOfStudy.Replace("سنوات", "").Trim())
                             : 4),
 
-                        FacultiesWithAcceptanceTests = g.Count(f => f.RequireAcceptanceTests),
-                        FacultiesWithoutAcceptanceTests = g.Count(f => !f.RequireAcceptanceTests),
+                        FacultiesWithAcceptanceTests = g.Where(f => !f.IsDeleted).Count(f => f.RequireAcceptanceTests),
+                        FacultiesWithoutAcceptanceTests = g.Where(f => !f.IsDeleted).Count(f => !f.RequireAcceptanceTests),
 
                         // التخصصات
-                        TotalSpecializations = g.SelectMany(f => f.SpecializationList.Where(s => !s.IsDeleted)).Count(),
+                        TotalSpecializations = g.Where(f => !f.IsDeleted).SelectMany(f => f.SpecializationList.Where(s => !s.IsDeleted)).Count(),
 
                         // أكثر الكليات طلاباً
-                        TopFacultiesByStudents = g
+                        TopFacultiesByStudents = g.
+                             Where(f => !f.IsDeleted)
                             .Where(f => f.StudentsNumber.HasValue)
                             .OrderByDescending(f => f.StudentsNumber)
                             .Take(5)
@@ -699,7 +776,7 @@ namespace BawabaUNI.Controllers
 
                         // أحدث الكليات
                         LatestFaculties = g
-                            .OrderByDescending(f => f.CreatedAt)
+                            .Where(f => !f.IsDeleted).OrderByDescending(f => f.CreatedAt)
                             .Take(5)
                             .Select(f => new
                             {
@@ -722,7 +799,7 @@ namespace BawabaUNI.Controllers
                             university.NameArabic,
                             university.NameEnglish
                         },
-                        Statistics = stats 
+                        Statistics = stats
                         //{
                         //    TotalFaculties = 0,
                         //    TotalStudents = 0,
@@ -797,10 +874,10 @@ namespace BawabaUNI.Controllers
                             university.NameArabic,
                             university.NameEnglish,
                             university.Description,
-                           
+
 
                         },
-                        Faculties = university.Faculties.Select(f => new
+                        Faculties = university.Faculties.Where(f => !f.IsDeleted).Select(f => new
                         {
                             // 🔹 المعلومات الأساسية للكلية
                             BasicInfo = new
@@ -814,13 +891,15 @@ namespace BawabaUNI.Controllers
                                 f.ProgramsNumber,
                                 f.Rank,
                                 f.RequireAcceptanceTests,
-                               
+                                f.Expenses,
+                                f.Coordination,
+                                f.GroupLink,
                                 f.CreatedAt,
                                 f.UpdatedAt
                             },
 
                             // 🔹 التخصصات
-                            Specializations = f.SpecializationList.Select(s => new
+                            Specializations = f.SpecializationList.Where(f => !f.IsDeleted).Select(s => new
                             {
                                 s.Id,
                                 s.Name,
@@ -831,7 +910,7 @@ namespace BawabaUNI.Controllers
                             }).ToList(),
 
                             // 🔹 خطة الدراسة الكاملة
-                            StudyPlan = f.StudyPlanYears.OrderBy(y => y.YearNumber).Select(y => new
+                            StudyPlan = f.StudyPlanYears.Where(f => !f.IsDeleted).OrderBy(y => y.YearNumber).Select(y => new
                             {
                                 // معلومات السنة الدراسية
                                 YearInfo = new
@@ -845,7 +924,7 @@ namespace BawabaUNI.Controllers
 
                                 // 🔸 المواد العامة (للسنوات العامة)
                                 GeneralMaterials = y.AcademicMaterials
-                                    .Where(m => m.StudyPlanSectionId == null) // مواد بدون قسم
+                                    .Where(f => !f.IsDeleted).Where(m => m.StudyPlanSectionId == null) // مواد بدون قسم
                                     .Select(m => new
                                     {
                                         m.Id,
@@ -863,7 +942,7 @@ namespace BawabaUNI.Controllers
                                     .ToList(),
 
                                 // 🔸 الأقسام والمواد المتخصصة (للسنوات المتخصصة)
-                                Sections = y.Sections.OrderBy(s => s.Name).Select(s => new
+                                Sections = y.Sections.Where(f => !f.IsDeleted).OrderBy(s => s.Name).Select(s => new
                                 {
                                     SectionInfo = new
                                     {
@@ -875,7 +954,7 @@ namespace BawabaUNI.Controllers
                                     },
 
                                     // مواد القسم
-                                    Materials = s.AcademicMaterials.Select(m => new
+                                    Materials = s.AcademicMaterials.Where(f => !f.IsDeleted).Select(m => new
                                     {
                                         m.Id,
                                         m.Name,
@@ -893,7 +972,7 @@ namespace BawabaUNI.Controllers
                                 }).ToList(),
 
                                 // 🔸 الوسائط المرتبطة بالسنة
-                                Media = y.StudyPlanMedia.Select(m => new
+                                Media = y.StudyPlanMedia.Where(f => !f.IsDeleted).Select(m => new
                                 {
                                     m.Id,
                                     m.MediaType,
@@ -904,7 +983,7 @@ namespace BawabaUNI.Controllers
                             }).ToList(),
 
                             // 🔹 فرص العمل
-                            JobOpportunities = f.JobOpportunities.Select(j => new
+                            JobOpportunities = f.JobOpportunities.Where(f => !f.IsDeleted).Select(j => new
                             {
                                 j.Id,
                                 j.Name,
@@ -929,10 +1008,10 @@ namespace BawabaUNI.Controllers
                             // 🔹 ملخص سريع
                             Summary = new
                             {
-                                TotalMaterials = f.StudyPlanYears.Sum(y =>
-                                    y.AcademicMaterials.Count(m => m.StudyPlanSectionId == null) +
-                                    y.Sections.Sum(s => s.AcademicMaterials.Count)),
-                                TotalCredits = f.StudyPlanYears.Sum(y =>
+                                TotalMaterials = f.StudyPlanYears.Where(f => !f.IsDeleted).Sum(y =>
+                                    y.AcademicMaterials.Where(f => !f.IsDeleted).Count(m => m.StudyPlanSectionId == null) +
+                                    y.Sections.Where(f => !f.IsDeleted).Sum(s => s.AcademicMaterials.Count)),
+                                TotalCredits = f.StudyPlanYears.Where(f => !f.IsDeleted).Sum(y =>
                                     y.AcademicMaterials.Where(m => m.StudyPlanSectionId == null).Sum(m => m.CreditHours) +
                                     y.Sections.Sum(s => s.AcademicMaterials.Sum(m => m.CreditHours)))
                             }
@@ -1216,7 +1295,24 @@ namespace BawabaUNI.Controllers
                     return NotFound(new { success = false, message = "الكلية غير موجودة" });
 
                 Console.WriteLine($"✅ تم العثور على الكلية: {faculty.NameArabic}");
+                // 3. معالجة الصورة - حذف القديمة وحفظ الجديدة
+                if (model.Image != null)
+                {
+                    // حذف الصورة القديمة إذا كانت موجودة
+                    if (!string.IsNullOrEmpty(faculty.ImageUrl))
+                    {
+                        await DeleteFile(faculty.ImageUrl);
+                        Console.WriteLine($"🗑️ تم حذف الصورة القديمة: {faculty.ImageUrl}");
+                    }
 
+                    // حفظ الصورة الجديدة
+                    var imageUrl = await SaveFile(model.Image, "faculty-images");
+                    if (!string.IsNullOrEmpty(imageUrl))
+                    {
+                        faculty.ImageUrl = imageUrl;
+                        Console.WriteLine($"📁 تم رفع صورة جديدة: {imageUrl}");
+                    }
+                }
                 // 3. تحديث بيانات الكلية الأساسية
                 faculty.NameArabic = model.NameArabic;
                 faculty.NameEnglish = model.NameEnglish ?? model.NameArabic;
@@ -1225,8 +1321,13 @@ namespace BawabaUNI.Controllers
                 faculty.DurationOfStudy = model.DurationOfStudy ?? "4 سنوات";
                 faculty.ProgramsNumber = model.ProgramsNumber;
                 faculty.RequireAcceptanceTests = model.RequireAcceptanceTests;
+                faculty.Expenses = model.Expenses;
+                faculty.Coordination = model.Coordination;
+                faculty.DescriptionOfStudyPlan = model.DescriptionOfStudyPlan;
+                faculty.Address = model.Address;
+                faculty.GroupLink = model.GroupLink;
                 faculty.UpdatedAt = DateTime.UtcNow;
-
+                
                 await _context.SaveChangesAsync();
 
                 // 4. 🔴 الحذف الفعلي لجميع البيانات القديمة
@@ -1380,7 +1481,7 @@ namespace BawabaUNI.Controllers
                                     {
                                         MediaType = model.MediaTypes[mediaIndex],
                                         MediaLink = mediaLink,
-                                        VisitLink = "",
+                                        VisitLink = model.MediaVisitLinks?[mediaIndex] ?? "",
                                         StudyPlanYearId = studyPlanYearId,
                                         CreatedAt = DateTime.UtcNow
                                     };
@@ -1608,11 +1709,11 @@ namespace BawabaUNI.Controllers
                 throw;
             }
         }
-       
 
-       
 
-       
+
+
+
         // 📌 GET: api/faculties/university/{universityId}/summary
         [HttpGet("university/{universityId}/summary")]
         public async Task<IActionResult> GetUniversityWithFacultiesSummary(int universityId)
@@ -1664,7 +1765,7 @@ namespace BawabaUNI.Controllers
                             university.GlobalRanking,
                             university.Type, // حكومية، خاصة، دولية
                             university.CreatedAt, // تاريخ إضافة الجامعة
-                         
+
 
                             // 🔹 معلومات الاتصال
                             ContactInfo = new
@@ -1672,23 +1773,23 @@ namespace BawabaUNI.Controllers
                                 university.PhoneNumber,
                                 university.Email,
                                 university.Website
-                               
+
                             },
 
                             // 🔹 خيارات السكن
                             Accommodation = new
                             {
                                 university.HousingOptions.Count
-                                
+
                             },
 
                             // 🔹 الموقع الجغرافي
                             LocationInfo = new
                             {
                                 university.Address,
-                             
+
                                 university.City
-                              
+
                             },
 
                             // 🔹 وسائل التواصل الاجتماعي
@@ -1698,18 +1799,18 @@ namespace BawabaUNI.Controllers
                                 university.Website,
                                 university.Email,
                                 university.PhoneNumber
-                               
+
                             },
 
                             // 🔹 الشعار والصور
                             Media = new
                             {
                                 university.UniversityImage,
-                            
+
                             },
 
                             // 🔹 الاعتمادات والشهادات
-                            
+
                         },
 
                         // 🔹 إحصائيات الجامعة
@@ -1745,7 +1846,7 @@ namespace BawabaUNI.Controllers
                                 f.ProgramsNumber,
                                 f.Rank,
                                 f.RequireAcceptanceTests,
-                              
+
                                 f.CreatedAt,
 
                                 // 🔹 معلومات موجزة عن التخصصات
@@ -1759,7 +1860,7 @@ namespace BawabaUNI.Controllers
                                      s.YearsNumber
                                  })
                                  .ToList(),
-                                
+
                                 SpecializationsCount = f.SpecializationList.Count,
 
                                 // 🔹 معلومات موجزة عن خطة الدراسة
@@ -1873,6 +1974,46 @@ namespace BawabaUNI.Controllers
             return count > 0 ? $"{Math.Round((double)totalYears / count, 1)} سنوات" : "غير محدد";
         }
 
+        // دالة مساعدة لحذف الملفات
+        private async Task<bool> DeleteFile(string fileUrl)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(fileUrl))
+                    return false;
 
+                // استخراج المسار النسبي من URL
+                // مثال: /uploads/faculty-images/file.jpg -> wwwroot/uploads/faculty-images/file.jpg
+                var fileName = Path.GetFileName(fileUrl);
+                var folder = fileUrl.Contains("faculty-images") ? "faculty-images" :
+                            fileUrl.Contains("studyplan-media") ? "studyplan-media" : "";
+
+                if (string.IsNullOrEmpty(folder))
+                    return false;
+
+                var filePath = Path.Combine(_env.WebRootPath, "uploads", folder, fileName);
+
+                if (System.IO.File.Exists(filePath))
+                {
+                    System.IO.File.Delete(filePath);
+                    Console.WriteLine($"✅ تم حذف الملف: {filePath}");
+                    return true;
+                }
+
+                Console.WriteLine($"⚠️ الملف غير موجود: {filePath}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ خطأ في حذف الملف: {ex.Message}");
+                return false;
+            }
+        }
+
+    }
+    public class UpdateExpensesCoordinationRequiredDto
+    {
+        public int Expenses { get; set; }
+        public int Coordination { get; set; }
     }
 }
