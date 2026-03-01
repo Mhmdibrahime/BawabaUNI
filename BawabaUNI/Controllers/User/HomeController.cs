@@ -79,7 +79,41 @@ namespace BawabaUNI.Controllers.User
 
             return Ok(heroImages);
         }
+        // Quick university search for autocomplete
+        [HttpGet("universities/quick-search")]
+        public async Task<IActionResult> QuickUniversitySearch([FromQuery] string term, [FromQuery] int limit = 5)
+        {
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                return Ok(new { Data = new List<object>() });
+            }
 
+            term = term.Trim().ToLower();
+
+            var results = await _context.Universities
+                .Where(u => !u.IsDeleted &&
+                           (u.NameArabic.ToLower().Contains(term) ||
+                            u.NameEnglish.ToLower().Contains(term)))
+                .OrderBy(u => u.NameArabic)
+                .Take(limit)
+                .Select(u => new
+                {
+                    u.Id,
+                    NameArabic = u.NameArabic,
+                    NameEnglish = u.NameEnglish,
+                    u.UniversityImage,
+                    u.Location,
+                    u.Type
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                Success = true,
+                Data = results,
+                Count = results.Count
+            });
+        }
         // 2. الحصول على صور المقالات الأخيرة
         [HttpGet("articles/latest")]
         public async Task<IActionResult> GetLatestArticleImages([FromQuery] int count = 3)

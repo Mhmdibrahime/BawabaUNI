@@ -1,4 +1,5 @@
 ﻿using BawabaUNI.Models.Data;
+using BawabaUNI.Models.DTOs;
 using BawabaUNI.Models.DTOs.User;
 using BawabaUNI.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -401,9 +402,9 @@ namespace BawabaUNI.Controllers.User
                         PlayerEmbedUrl = (!v.IsPaid || hasAccess) ? v.PlayerEmbedUrl : null,
                         VimeoId = v.VimeoId,
                         CreatedAt = v.CreatedAt
-                    })
-                    .ToListAsync();
+                       
 
+                    }).ToListAsync();
                 // إضافة فيديوهات عينة مجانية إذا لم يكن لدى المستخدم وصول
                 if (!hasAccess && videos.Count(v => !v.IsPaid) < 3)
                 {
@@ -468,7 +469,14 @@ namespace BawabaUNI.Controllers.User
                         VimeoId = v.VimeoId,
                         CourseId = v.CourseId,
                         CourseName = v.Course.NameArabic,
-                        CreatedAt = v.CreatedAt
+                        CreatedAt = v.CreatedAt,
+                        VideoAttachments = v.VideoAttachments.Select(va => new
+                        {
+                            Id = va.Id,
+                            FileName = va.FileName,
+                            FileType = va.FileType,
+                            FileUrl = va.FileUrl
+                        }).ToList()
                     })
                     .FirstOrDefaultAsync();
 
@@ -563,7 +571,14 @@ namespace BawabaUNI.Controllers.User
                         VimeoId = v.VimeoId,
                         CourseId = v.CourseId,
                         CanAccess = true,
-                        AccessMessage = "فيديو مجاني"
+                        AccessMessage = "فيديو مجاني",
+                        videoAttachments = v.VideoAttachments.Select(va => new VideoAttachment
+                        {
+                            Id = va.Id,
+                            FileName = va.FileName,
+                            FileType = va.FileType,
+                            FileUrl = va.FileUrl
+                        }).ToList()
                     })
                     .ToListAsync();
 
@@ -658,7 +673,40 @@ namespace BawabaUNI.Controllers.User
                 });
             }
         }
+        public class VideoCourseDto
+        {
+            public int Id { get; set; }
+            public string Title { get; set; }
+            public int DurationInMinutes { get; set; }
+            public bool IsPaid { get; set; }
+            public string Description { get; set; }
+            public bool CanAccess { get; set; }
+            public string AccessMessage { get; set; }
+            public string? PlayerEmbedUrl { get; set; }
+            public string? VimeoId { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public List<VideoAttachment> videoAttachments { get; set; }
+        }
 
+
+        public class FullVideoDto : VideoCourseDto
+        {
+            public string VideoLink { get; set; }
+            public int CourseId { get; set; }
+            public string CourseName { get; set; }
+        }
+
+
+        public class VideoAccessCheckDto
+        {
+            public bool HasAccess { get; set; }
+            public string Message { get; set; }
+            public bool IsCoursePaid { get; set; }
+            public bool IsVideoFree { get; set; }
+            public bool IsTrialAvailable { get; set; }
+            public DateTime? PurchaseDate { get; set; }
+            public DateTime? AccessUntil { get; set; }
+        }
 
     }
 }

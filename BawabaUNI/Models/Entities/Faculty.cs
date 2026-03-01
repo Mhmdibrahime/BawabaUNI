@@ -14,6 +14,11 @@ namespace BawabaUNI.Models.Entities
         [Required]
         [MaxLength(200)]
         public string NameEnglish { get; set; }
+        [MaxLength(20)]
+
+        public string Type { get; set; } = "كلية";
+        public bool? HasHousing { get; set; } // هل يوجد سكن؟
+
 
         [Required]
         [Column(TypeName = "nvarchar(MAX)")]
@@ -48,15 +53,16 @@ namespace BawabaUNI.Models.Entities
         [MaxLength(500)]
         public string? DescriptionOfStudyPlan { get; set; }
         // Foreign Key
-        public int UniversityId { get; set; }
+        public int? UniversityId { get; set; }
 
         // Navigation properties
         [ForeignKey("UniversityId")]
-        public virtual University University { get; set; }
+        public virtual University? University { get; set; }
 
         // Updated: A faculty can have multiple study plan years
         public virtual ICollection<StudyPlanYear> StudyPlanYears { get; set; }
         public virtual ICollection<Specialization> SpecializationList { get; set; }
         public virtual ICollection<JobOpportunity> JobOpportunities { get; set; }
+        public virtual ICollection<FacultyHousingOption> FacultyHousingOption { get; set; }
     }
 }

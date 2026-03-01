@@ -296,7 +296,7 @@ namespace BawabaUNI.Controllers.User
                         Coordination = f.Coordination,
                         GroupLink  = f.GroupLink,
                         // معلومات الجامعة
-                        UniversityId = f.UniversityId,
+                        UniversityId = f.UniversityId ?? 0,
                         UniversityNameArabic = f.University.NameArabic,
                         UniversityNameEnglish = f.University.NameEnglish,
                         UniversityType = f.University.Type,
@@ -568,7 +568,7 @@ namespace BawabaUNI.Controllers.User
                     Coordination = f.Coordination,
                     GroupLink = f.GroupLink,
                     RequireAcceptanceTests = f.RequireAcceptanceTests,
-                    UniversityId = f.UniversityId,
+                    UniversityId = f.UniversityId ?? 0,
                     UniversityNameArabic = f.University.NameArabic,
                     ShortDescription = f.Description.Length > 150 ?
                         f.Description.Substring(0, 150) + "..." : f.Description

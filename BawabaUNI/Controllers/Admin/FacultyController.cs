@@ -38,7 +38,7 @@ namespace BawabaUNI.Controllers
                 // 2. التحقق من الجامعة
                 var universityExists = await _context.Universities
                     .AnyAsync(u => u.Id == universityId && !u.IsDeleted);
-                if (!universityExists)
+                if (!universityExists )
                     return BadRequest(new { success = false, message = "الجامعة غير موجودة" });
                 var imageUrl = "";
                 if (model.Image != null)
@@ -56,6 +56,7 @@ namespace BawabaUNI.Controllers
                     NameArabic = model.NameArabic,
                     NameEnglish = model.NameEnglish ?? model.NameArabic,
                     Description = model.Description,
+                    Type = "كلية",
                     StudentsNumber = model.StudentsNumber,
                     DurationOfStudy = model.DurationOfStudy ?? "4 سنوات",
                     ProgramsNumber = model.ProgramsNumber,

@@ -256,7 +256,7 @@ namespace BawabaUNI.Controllers.User
             return new FacultyComparisonDetailDto
             {
                 FacultyId = faculty.Id,
-                UniversityId = faculty.UniversityId,
+                UniversityId = faculty.UniversityId ?? 0,
                 UniversityNameArabic = faculty.University.NameArabic,
                 UniversityNameEnglish = faculty.University.NameEnglish,
                 NameArabic = faculty.NameArabic,

@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using BawabaUNI.Migrations;
+using System.ComponentModel.DataAnnotations;
 
 namespace BawabaUNI.Models.DTOs.User
 {
@@ -118,37 +119,5 @@ namespace BawabaUNI.Models.DTOs.User
         public string StudentName { get; set; }
         public string AssignedToName { get; set; }
     }
-    public class VideoCourseDto
-    {
-        public int Id { get; set; }
-        public string Title { get; set; }
-        public int DurationInMinutes { get; set; }
-        public bool IsPaid { get; set; }
-        public string Description { get; set; }
-        public bool CanAccess { get; set; } 
-        public string AccessMessage { get; set; } 
-        public string? PlayerEmbedUrl { get; set; } 
-        public string? VimeoId { get; set; }
-        public DateTime CreatedAt { get; set; }
-    }
-
     
-    public class FullVideoDto : VideoCourseDto
-    {
-        public string VideoLink { get; set; }
-        public int CourseId { get; set; }
-        public string CourseName { get; set; }
-    }
-
-
-    public class VideoAccessCheckDto
-    {
-        public bool HasAccess { get; set; }
-        public string Message { get; set; }
-        public bool IsCoursePaid { get; set; }
-        public bool IsVideoFree { get; set; }
-        public bool IsTrialAvailable { get; set; }
-        public DateTime? PurchaseDate { get; set; }
-        public DateTime? AccessUntil { get; set; }
-    }
 }

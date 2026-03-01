@@ -34,5 +34,7 @@ namespace BawabaUNI.Models.Entities
 
         [ForeignKey("CourseId")]
         public virtual Course Course { get; set; }
+
+        public virtual ICollection<VideoAttachment> VideoAttachments { get; set; }
     }
 }

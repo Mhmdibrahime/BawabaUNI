@@ -25,6 +25,7 @@ namespace BawabaUNI.Models.Data
         public DbSet<DocumentRequired> DocumentsRequired { get; set; }
         public DbSet<HousingOption> HousingOptions { get; set; }
         public DbSet<Faculty> Faculties { get; set; }
+        public DbSet<FacultyHousingOption> FacultyHousingOptions { get; set; }
         public DbSet<Specialization> Specializations { get; set; }
         public DbSet<StudyPlanYear> StudyPlanYears { get; set; } // Updated
         public DbSet<StudyPlanMedia> StudyPlanMedia { get; set; }
