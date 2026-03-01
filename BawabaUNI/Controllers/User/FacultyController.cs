@@ -61,6 +61,8 @@ namespace BawabaUNI.Controllers.User
             public string Name { get; set; }
             public string Code { get; set; }
             public int? CreditHours { get; set; }
+            public int AcademicMaterialsCount { get; set; }
+
             public List<AcademicMaterialDto> AcademicMaterials { get; set; }
         }
 
@@ -103,7 +105,7 @@ namespace BawabaUNI.Controllers.User
             public string NameEnglish { get; set; }
             public string Description { get; set; }
             public string? Address { get; set; }
-
+            public int? UniversityId { get; set; }
             public string? ImageUrl { get; set; }
             public string? DescriptionOfStudyPlan { get; set; }
             public int? StudentsNumber { get; set; }
@@ -360,11 +362,9 @@ namespace BawabaUNI.Controllers.User
         {
             try
             {
-                // 1. Get basic faculty info with University
+                // 1. First, get just the basic faculty info with minimal includes
                 var faculty = await _context.Faculties
                     .Where(f => f.Id == id && !f.IsDeleted)
-                    .Include(f => f.University)
-                        .ThenInclude(u => u.DocumentsRequired)
                     .Select(f => new FacultyDetailDto
                     {
                         Id = f.Id,
@@ -382,33 +382,14 @@ namespace BawabaUNI.Controllers.User
                         CreatedDate = f.CreatedAt,
                         Expenses = f.Expenses,
                         Coordination = f.Coordination,
-                        GroupLink  = f.GroupLink,
-                        University = f.University != null ? new UniversityInfoDto
-                        {
-                            Id = f.University.Id,
-                            NameArabic = f.University.NameArabic,
-                            NameEnglish = f.University.NameEnglish,
-                            Type = f.University.Type,
-                            Location = f.University.Location,
-                            UniversityImage = f.University.UniversityImage,
-                            Website = f.University.Website,
-                            PhoneNumber = f.University.PhoneNumber,
-                            Email = f.University.Email,
-                            Address = f.University.Address,
-                            City = f.University.City,
-                            FoundingYear = f.University.FoundingYear,
-                            Documents = f.University.DocumentsRequired != null ? f.University.DocumentsRequired.Select(x => new DocumentRequired
-                            {
-                                DocumentName = x.DocumentName,
-                                Description = x.Description
-                            }).ToList() : new List<DocumentRequired>()
-                        } : null,
-                        // Initialize empty lists - will be populated separately
+                        GroupLink = f.GroupLink,
+                        UniversityId = f.UniversityId, // Store ID instead of full object initially
+                                                       // Initialize empty lists
                         StudyPlanYears = new List<StudyPlanYearDto>(),
                         SpecializationList = new List<SpecializationDto>(),
                         JobOpportunities = new List<JobOpportunityDto>()
                     })
-                    .AsNoTracking() // Optional: improves performance for read-only operations
+                    .AsNoTracking()
                     .FirstOrDefaultAsync();
 
                 if (faculty == null)
@@ -420,12 +401,41 @@ namespace BawabaUNI.Controllers.User
                     });
                 }
 
-                // 2. Load StudyPlanYears with Sections and AcademicMaterials
+                // 2. Load University data separately if needed
+                if (faculty.UniversityId.HasValue)
+                {
+                    var university = await _context.Universities
+                        .Where(u => u.Id == faculty.UniversityId)
+                        .Select(u => new UniversityInfoDto
+                        {
+                            Id = u.Id,
+                            NameArabic = u.NameArabic,
+                            NameEnglish = u.NameEnglish,
+                            Type = u.Type,
+                            Location = u.Location,
+                            UniversityImage = u.UniversityImage,
+                            Website = u.Website,
+                            PhoneNumber = u.PhoneNumber,
+                            Email = u.Email,
+                            Address = u.Address,
+                            City = u.City,
+                            FoundingYear = u.FoundingYear,
+                            Documents = u.DocumentsRequired
+                                .Select(x => new DocumentRequired
+                                {
+                                    DocumentName = x.DocumentName,
+                                    Description = x.Description
+                                }).ToList()
+                        })
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync();
+
+                    faculty.University = university;
+                }
+
+                // 3. Load StudyPlanYears with pagination or more selective loading
                 var studyPlanYears = await _context.StudyPlanYears
                     .Where(y => y.FacultyId == id)
-                    .Include(y => y.Sections)
-                        .ThenInclude(s => s.AcademicMaterials)
-                    .Include(y => y.StudyPlanMedia)
                     .Select(y => new StudyPlanYearDto
                     {
                         Id = y.Id,
@@ -433,22 +443,9 @@ namespace BawabaUNI.Controllers.User
                         YearNumber = y.YearNumber,
                         Type = y.Type,
                         CreatedDate = y.CreatedAt,
-                        AcademicMaterials = y.AcademicMaterials != null ? y.AcademicMaterials.Select(am => new AcademicMaterialDto
-                        {
-                            Id = am.Id,
-                            Name = am.Name,
-                            Code = am.Code,
-                            Semester = am.Semester,
-                            Type = am.Type,
-                            CreditHours = am.CreditHours
-                        }).ToList() : new List<AcademicMaterialDto>(),
-                        Sections = y.Sections != null ? y.Sections.Select(s => new StudyPlanSectionDto
-                        {
-                            Id = s.Id,
-                            Name = s.Name,
-                            Code = s.Code,
-                            CreditHours = s.CreditHours,
-                            AcademicMaterials = s.AcademicMaterials != null ? s.AcademicMaterials.Select(am => new AcademicMaterialDto
+                        // Limit the number of academic materials if there are many
+                        AcademicMaterials = y.AcademicMaterials
+                            .Select(am => new AcademicMaterialDto
                             {
                                 Id = am.Id,
                                 Name = am.Name,
@@ -456,22 +453,57 @@ namespace BawabaUNI.Controllers.User
                                 Semester = am.Semester,
                                 Type = am.Type,
                                 CreditHours = am.CreditHours
-                            }).ToList() : new List<AcademicMaterialDto>()
-                        }).ToList() : new List<StudyPlanSectionDto>(),
-                        Media = y.StudyPlanMedia != null ? y.StudyPlanMedia.Select(m => new StudyPlanMediaDto
+                            }).ToList(),
+                        // Load sections without their academic materials to reduce complexity
+                        Sections = y.Sections.Select(s => new StudyPlanSectionDto
                         {
-                            Id = m.Id,
-                            MediaType = m.MediaType,
-                            MediaLink = m.MediaLink,
-                            VisitLink = m.VisitLink
-                        }).ToList() : new List<StudyPlanMediaDto>()
+                            Id = s.Id,
+                            Name = s.Name,
+                            Code = s.Code,
+                            CreditHours = s.CreditHours,
+                            // Load academic materials count instead of full list if needed only for stats
+                            AcademicMaterialsCount = s.AcademicMaterials.Count,
+                            AcademicMaterials = new List<AcademicMaterialDto>() // Empty initially
+                        }).ToList(),
+                        Media = y.StudyPlanMedia
+                            .Select(m => new StudyPlanMediaDto
+                            {
+                                Id = m.Id,
+                                MediaType = m.MediaType,
+                                MediaLink = m.MediaLink,
+                                VisitLink = m.VisitLink
+                            }).ToList()
                     })
                     .AsNoTracking()
                     .ToListAsync();
 
+                // 4. Load all academic materials in separate queries if needed
+                foreach (var year in studyPlanYears)
+                {
+                    foreach (var section in year.Sections.Where(s => s.Id > 0))
+                    {
+                        var materials = await _context.AcademicMaterials
+                            .Where(am => am.StudyPlanSectionId == section.Id)
+                            .Select(am => new AcademicMaterialDto
+                            {
+                                Id = am.Id,
+                                Name = am.Name,
+                                Code = am.Code,
+                                Semester = am.Semester,
+                                Type = am.Type,
+                                CreditHours = am.CreditHours
+                            })
+                            .AsNoTracking()
+                            .ToListAsync();
+
+                        section.AcademicMaterials = materials;
+                    }
+                }
+
                 faculty.StudyPlanYears = studyPlanYears;
 
-                // 3. Load Specializations separately
+                // Rest of the code remains the same...
+                // 5. Load Specializations
                 var specializations = await _context.Specializations
                     .Where(s => s.FacultyId == id)
                     .Select(s => new SpecializationDto
@@ -487,7 +519,7 @@ namespace BawabaUNI.Controllers.User
 
                 faculty.SpecializationList = specializations;
 
-                // 4. Load JobOpportunities separately
+                // 6. Load JobOpportunities
                 var jobOpportunities = await _context.JobOpportunities
                     .Where(j => j.FacultyId == id)
                     .Select(j => new JobOpportunityDto
@@ -500,7 +532,7 @@ namespace BawabaUNI.Controllers.User
 
                 faculty.JobOpportunities = jobOpportunities;
 
-                // Calculate statistics
+                // Calculate statistics (update this part if needed based on changes)
                 var response = new
                 {
                     Success = true,
@@ -534,7 +566,7 @@ namespace BawabaUNI.Controllers.User
             }
             catch (Exception ex)
             {
-                // Log the exception here (consider using ILogger)
+                // Log the exception
                 return StatusCode(500, new
                 {
                     Success = false,
@@ -543,6 +575,8 @@ namespace BawabaUNI.Controllers.User
                 });
             }
         }
+
+        
         // 3. الحصول على كليات حسب الجامعة
         [HttpGet("faculties/by-university/{universityId}")]
         public async Task<IActionResult> GetFacultiesByUniversity(int universityId)

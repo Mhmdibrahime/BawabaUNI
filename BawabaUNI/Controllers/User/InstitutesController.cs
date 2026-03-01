@@ -100,6 +100,7 @@ namespace BawabaUNI.Controllers.User
             public List<HousingOptionDto> HousingOptions { get; set; }
         }
 
+        // Update your DTOs to include the IDs for mapping
         public class StudyPlanYearDto
         {
             public int Id { get; set; }
@@ -107,9 +108,9 @@ namespace BawabaUNI.Controllers.User
             public int YearNumber { get; set; }
             public string Type { get; set; }
             public DateTime CreatedDate { get; set; }
-            public List<AcademicMaterialDto> AcademicMaterials { get; set; }
-            public List<StudyPlanSectionDto> Sections { get; set; }
-            public List<StudyPlanMediaDto> Media { get; set; }
+            public List<AcademicMaterialDto> AcademicMaterials { get; set; } = new();
+            public List<StudyPlanSectionDto> Sections { get; set; } = new();
+            public List<StudyPlanMediaDto> Media { get; set; } = new();
         }
 
         public class AcademicMaterialDto
@@ -119,7 +120,9 @@ namespace BawabaUNI.Controllers.User
             public string Code { get; set; }
             public int Semester { get; set; }
             public string Type { get; set; }
-            public int CreditHours { get; set; }
+            public int? CreditHours { get; set; }
+            public int? StudyPlanYearId { get; set; }
+            public int? StudyPlanSectionId { get; set; }
         }
 
         public class StudyPlanSectionDto
@@ -128,7 +131,8 @@ namespace BawabaUNI.Controllers.User
             public string Name { get; set; }
             public string Code { get; set; }
             public int? CreditHours { get; set; }
-            public List<AcademicMaterialDto> AcademicMaterials { get; set; }
+            public int StudyPlanYearId { get; set; }
+            public List<AcademicMaterialDto> AcademicMaterials { get; set; } = new();
         }
 
         public class StudyPlanMediaDto
@@ -137,6 +141,7 @@ namespace BawabaUNI.Controllers.User
             public string MediaType { get; set; }
             public string MediaLink { get; set; }
             public string VisitLink { get; set; }
+            public int StudyPlanYearId { get; set; }
         }
 
         public class SpecializationDto
@@ -375,7 +380,7 @@ namespace BawabaUNI.Controllers.User
         {
             try
             {
-                // Get basic institute info
+                // 1. Get basic institute info (simple query)
                 var institute = await _context.Faculties
                     .Where(i => i.Id == id && i.UniversityId == null && !i.IsDeleted)
                     .Select(i => new InstituteDetailDto
@@ -396,17 +401,8 @@ namespace BawabaUNI.Controllers.User
                         Expenses = i.Expenses,
                         Coordination = i.Coordination,
                         GroupLink = i.GroupLink,
-
-                        // Institute specific fields
                         Type = i.Type,
-                        HasHousing = i.HasHousing,
-                       
-
-                        // Initialize empty lists
-                        StudyPlanYears = new List<StudyPlanYearDto>(),
-                        SpecializationList = new List<SpecializationDto>(),
-                        JobOpportunities = new List<JobOpportunityDto>(),
-                        HousingOptions = new List<HousingOptionDto>()
+                        HasHousing = i.HasHousing
                     })
                     .AsNoTracking()
                     .FirstOrDefaultAsync();
@@ -420,7 +416,7 @@ namespace BawabaUNI.Controllers.User
                     });
                 }
 
-                // Load housing options
+                // 2. Get housing options (simple query)
                 var housingOptions = await _context.FacultyHousingOptions
                     .Where(h => h.FacultyId == id && !h.IsDeleted)
                     .Select(h => new HousingOptionDto
@@ -436,66 +432,142 @@ namespace BawabaUNI.Controllers.User
 
                 institute.HousingOptions = housingOptions;
 
-                // Load study plan years with sections and materials
+                // 3. Get study plan years (simple query without includes)
                 var studyPlanYears = await _context.StudyPlanYears
                     .Where(y => y.FacultyId == id && !y.IsDeleted)
-                    .Include(y => y.Sections)
-                        .ThenInclude(s => s.AcademicMaterials)
-                    .Include(y => y.StudyPlanMedia)
                     .Select(y => new StudyPlanYearDto
                     {
                         Id = y.Id,
                         YearName = y.YearName,
                         YearNumber = y.YearNumber,
                         Type = y.Type,
-                        CreatedDate = y.CreatedAt,
-                        AcademicMaterials = y.AcademicMaterials != null
-                            ? y.AcademicMaterials.Where(am => !am.IsDeleted).Select(am => new AcademicMaterialDto
+                        CreatedDate = y.CreatedAt
+                    })
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                // 4. Get materials for each year separately (batch query)
+                var yearIds = studyPlanYears.Select(y => y.Id).ToList();
+
+                if (yearIds.Any())
+                {
+                    // Get all academic materials for these years
+                    var materials = await _context.AcademicMaterials
+                        .Where(m => yearIds.Contains(m.StudyPlanYearId.Value) && !m.IsDeleted)
+                        .Select(m => new AcademicMaterialDto
+                        {
+                            Id = m.Id,
+                            Name = m.Name,
+                            Code = m.Code,
+                            Semester = m.Semester,
+                            Type = m.Type,
+                            CreditHours = m.CreditHours,
+                            StudyPlanYearId = m.StudyPlanYearId.Value
+                        })
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    // Get all sections for these years
+                    var sections = await _context.StudyPlanSections
+                        .Where(s => yearIds.Contains(s.StudyPlanYearId) && !s.IsDeleted)
+                        .Select(s => new StudyPlanSectionDto
+                        {
+                            Id = s.Id,
+                            Name = s.Name,
+                            Code = s.Code,
+                            CreditHours = s.CreditHours,
+                            StudyPlanYearId = s.StudyPlanYearId
+                        })
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    // Get materials for sections
+                    var sectionIds = sections.Select(s => s.Id).ToList();
+                    var sectionMaterials = new List<AcademicMaterialDto>();
+
+                    if (sectionIds.Any())
+                    {
+                        sectionMaterials = await _context.AcademicMaterials
+                            .Where(m => sectionIds.Contains(m.StudyPlanSectionId.Value) && !m.IsDeleted)
+                            .Select(m => new AcademicMaterialDto
                             {
-                                Id = am.Id,
-                                Name = am.Name,
-                                Code = am.Code,
-                                Semester = am.Semester,
-                                Type = am.Type,
-                                CreditHours = am.CreditHours
-                            }).ToList()
-                            : new List<AcademicMaterialDto>(),
-                        Sections = y.Sections != null
-                            ? y.Sections.Where(s => !s.IsDeleted).Select(s => new StudyPlanSectionDto
+                                Id = m.Id,
+                                Name = m.Name,
+                                Code = m.Code,
+                                Semester = m.Semester,
+                                Type = m.Type,
+                                CreditHours = m.CreditHours,
+                                StudyPlanSectionId = m.StudyPlanSectionId.Value
+                            })
+                            .AsNoTracking()
+                            .ToListAsync();
+                    }
+
+                    // Get media for years
+                    var media = await _context.StudyPlanMedia
+                        .Where(m => yearIds.Contains(m.StudyPlanYearId) && !m.IsDeleted)
+                        .Select(m => new StudyPlanMediaDto
+                        {
+                            Id = m.Id,
+                            MediaType = m.MediaType,
+                            MediaLink = m.MediaLink,
+                            VisitLink = m.VisitLink,
+                            StudyPlanYearId = m.StudyPlanYearId
+                        })
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    // Map data back to years in memory
+                    foreach (var year in studyPlanYears)
+                    {
+                        year.AcademicMaterials = materials
+                            .Where(m => m.StudyPlanYearId == year.Id)
+                            .Select(m => new AcademicMaterialDto
+                            {
+                                Id = m.Id,
+                                Name = m.Name,
+                                Code = m.Code,
+                                Semester = m.Semester,
+                                Type = m.Type,
+                                CreditHours = m.CreditHours
+                            }).ToList();
+
+                        year.Sections = sections
+                            .Where(s => s.StudyPlanYearId == year.Id)
+                            .Select(s => new StudyPlanSectionDto
                             {
                                 Id = s.Id,
                                 Name = s.Name,
                                 Code = s.Code,
                                 CreditHours = s.CreditHours,
-                                AcademicMaterials = s.AcademicMaterials != null
-                                    ? s.AcademicMaterials.Where(am => !am.IsDeleted).Select(am => new AcademicMaterialDto
+                                AcademicMaterials = sectionMaterials
+                                    .Where(sm => sm.StudyPlanSectionId == s.Id)
+                                    .Select(sm => new AcademicMaterialDto
                                     {
-                                        Id = am.Id,
-                                        Name = am.Name,
-                                        Code = am.Code,
-                                        Semester = am.Semester,
-                                        Type = am.Type,
-                                        CreditHours = am.CreditHours
+                                        Id = sm.Id,
+                                        Name = sm.Name,
+                                        Code = sm.Code,
+                                        Semester = sm.Semester,
+                                        Type = sm.Type,
+                                        CreditHours = sm.CreditHours
                                     }).ToList()
-                                    : new List<AcademicMaterialDto>()
-                            }).ToList()
-                            : new List<StudyPlanSectionDto>(),
-                        Media = y.StudyPlanMedia != null
-                            ? y.StudyPlanMedia.Where(m => !m.IsDeleted).Select(m => new StudyPlanMediaDto
+                            }).ToList();
+
+                        year.Media = media
+                            .Where(m => m.StudyPlanYearId == year.Id)
+                            .Select(m => new StudyPlanMediaDto
                             {
                                 Id = m.Id,
                                 MediaType = m.MediaType,
                                 MediaLink = m.MediaLink,
                                 VisitLink = m.VisitLink
-                            }).ToList()
-                            : new List<StudyPlanMediaDto>()
-                    })
-                    .AsNoTracking()
-                    .ToListAsync();
+                            }).ToList();
+                    }
+                }
 
                 institute.StudyPlanYears = studyPlanYears;
 
-                // Load specializations
+                // 5. Get specializations (simple query)
                 var specializations = await _context.Specializations
                     .Where(s => s.FacultyId == id && !s.IsDeleted)
                     .Select(s => new SpecializationDto
@@ -511,7 +583,7 @@ namespace BawabaUNI.Controllers.User
 
                 institute.SpecializationList = specializations;
 
-                // Load job opportunities
+                // 6. Get job opportunities (simple query)
                 var jobOpportunities = await _context.JobOpportunities
                     .Where(j => j.FacultyId == id && !j.IsDeleted)
                     .Select(j => new JobOpportunityDto
@@ -578,5 +650,6 @@ namespace BawabaUNI.Controllers.User
                 });
             }
         }
+
     }
 }

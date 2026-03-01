@@ -86,9 +86,9 @@ namespace BawabaUNI.Controllers.Admin
                 var instituteId = institute.Id;
 
                 // 4. إضافة خيارات السكن إذا كانت متوفرة
-                if (model.HasHousing && model.HousingOptions != null && model.HousingOptions.Any())
+                if (model.HasHousing && model.HousingOptionNames != null && model.HousingOptionNames.Any())
                 {
-                    await AddHousingOptions(instituteId, model.HousingOptions);
+                    await AddHousingOptionsFromLists(instituteId, model);
                 }
 
                 // 5. إضافة التخصصات
@@ -115,7 +115,7 @@ namespace BawabaUNI.Controllers.Admin
                     instituteId,
                     type = model.Type,
                     hasHousing = model.HasHousing,
-                    housingOptionsCount = model.HousingOptions?.Count ?? 0,
+                    housingOptionsCount = model.HousingOptionNames?.Count ?? 0,
                     specializationCount = specCount,
                     yearCount = studyPlanStats.yearCount,
                     semesterCount = studyPlanStats.semesterCount,
@@ -527,9 +527,9 @@ namespace BawabaUNI.Controllers.Admin
                 await HardDeleteAllInstituteData(instituteId);
 
                 // إضافة البيانات الجديدة
-                if (model.HasHousing && model.HousingOptions != null && model.HousingOptions.Any())
+                if (model.HasHousing && model.HousingOptionNames != null && model.HousingOptionNames.Any())
                 {
-                    await AddHousingOptions(instituteId, model.HousingOptions);
+                    await AddHousingOptionsFromLists(instituteId, model);
                 }
 
                 if (model.SpecializationNames != null)
@@ -1045,27 +1045,51 @@ namespace BawabaUNI.Controllers.Admin
 
         #region Private Helper Methods
 
-        private async Task AddHousingOptions(int instituteId, List<HousingOptionFormModel> housingOptions)
+        private async Task AddHousingOptionsFromLists(int instituteId, InstituteFormModel model)
         {
-            foreach (var option in housingOptions)
+            int housingCount = 0;
+
+            for (int i = 0; i < model.HousingOptionNames.Count; i++)
             {
-                if (string.IsNullOrEmpty(option.Name)) continue;
+                if (string.IsNullOrEmpty(model.HousingOptionNames[i])) continue;
+
+                string imagePath = null;
+
+                // Handle image upload if provided
+                if (model.HousingOptionImages != null && i < model.HousingOptionImages.Count &&
+                    model.HousingOptionImages[i] != null && model.HousingOptionImages[i].Length > 0)
+                {
+                    imagePath = await SaveFile(model.HousingOptionImages[i], "housing-options");
+                    Console.WriteLine($"📁 تم رفع صورة السكن {i + 1}: {imagePath}");
+                }
+
+                string phoneNumber = model.HousingOptionPhoneNumbers != null && i < model.HousingOptionPhoneNumbers.Count
+                    ? model.HousingOptionPhoneNumbers[i]
+                    : "";
+
+                string description = model.HousingOptionDescriptions != null && i < model.HousingOptionDescriptions.Count
+                    ? model.HousingOptionDescriptions[i]
+                    : "";
 
                 var housingOption = new FacultyHousingOption
                 {
-                    Name = option.Name,
-                    PhoneNumber = option.PhoneNumber,
-                    Description = option.Description,
-                    ImagePath = option.ImagePath,
+                    Name = model.HousingOptionNames[i],
+                    PhoneNumber = phoneNumber,
+                    Description = description,
+                    ImagePath = imagePath,
                     FacultyId = instituteId,
                     CreatedAt = DateTime.UtcNow
                 };
 
                 _context.FacultyHousingOptions.Add(housingOption);
+                housingCount++;
             }
 
-            await _context.SaveChangesAsync();
-            Console.WriteLine($"✅ تم إضافة {housingOptions.Count} خيار سكن");
+            if (housingCount > 0)
+            {
+                await _context.SaveChangesAsync();
+                Console.WriteLine($"✅ تم إضافة {housingCount} خيار سكن");
+            }
         }
 
         private async Task<int> AddSpecializations(int instituteId, InstituteFormModel model)
@@ -1466,53 +1490,57 @@ namespace BawabaUNI.Controllers.Admin
         public int Coordination { get; set; }
         public string GroupLink { get; set; }
         public string Address { get; set; }
-        public string DescriptionOfStudyPlan { get; set; }
+        public string? DescriptionOfStudyPlan { get; set; }
         public IFormFile Image { get; set; }
 
         // حقول إضافية للمعهد
         public bool HasHousing { get; set; }
-        
 
-        // خيارات السكن
-        public List<HousingOptionFormModel> HousingOptions { get; set; }
+
+
+        // خيارات السكن - كقوائم مفهرسة (مثل باقي الحقول)
+        public List<string>? HousingOptionNames { get; set; }
+        public List<string>? HousingOptionPhoneNumbers { get; set; }
+        public List<string>? HousingOptionDescriptions { get; set; }
+        public List<IFormFile>? HousingOptionImages { get; set; }
 
         // التخصصات
-        public List<string> SpecializationNames { get; set; }
-        public List<int> SpecializationYearsNumbers { get; set; }
-        public List<string> SpecializationDescriptions { get; set; }
+        public List<string>? SpecializationNames { get; set; }
+        public List<int>? SpecializationYearsNumbers { get; set; }
+        public List<string>? SpecializationDescriptions { get; set; }
 
         // خطة الدراسة - السنوات
-        public List<string> YearNames { get; set; }
-        public List<bool> YearHasSpecialization { get; set; }
+        public List<string>?  YearNames { get; set; }
+        public List<bool>? YearHasSpecialization { get; set; }
 
         // الوسائط
-        public List<string> MediaTypes { get; set; }
-        public List<IFormFile> MediaFiles { get; set; }
-        public List<string> MediaVisitLinks { get; set; }
-        public List<int> MediaYearIndices { get; set; }
+        public List<string>? MediaTypes { get; set; }
+        public List<IFormFile>? MediaFiles { get; set; }
+        public List<string>? MediaVisitLinks { get; set; }
+        public List<int>? MediaYearIndices { get; set; }
 
         // الفصول الدراسية
-        public List<string> SemesterNames { get; set; }
-        public List<int> SemesterYearIndices { get; set; }
+        public List<string>? SemesterNames { get; set; }
+        public List<int>? SemesterYearIndices { get; set; }
 
         // مواد الفصول
-        public List<string> SemesterMaterialNames { get; set; }
-        public List<string> SemesterMaterialCodes { get; set; }
-        public List<int> SemesterMaterialSemesterIndices { get; set; }
+        public List<string>? SemesterMaterialNames { get; set; }
+        public List<string>? SemesterMaterialCodes { get; set; }
+        public List<int>? SemesterMaterialSemesterIndices { get; set; }
 
         // الأقسام
-        public List<string> SectionNames { get; set; }
-        public List<string> SectionCodes { get; set; }
-        public List<int> SectionYearIndices { get; set; }
+        public List<string>? SectionNames { get; set; }
+        public List<string>? SectionCodes { get; set; }
+        public List<int>? SectionYearIndices { get; set; }
 
         // مواد الأقسام
-        public List<string> SectionMaterialNames { get; set; }
-        public List<string> SectionMaterialCodes { get; set; }
-        public List<int> SectionMaterialSectionIndices { get; set; }
-        public List<int> SectionMaterialSemesterIndices { get; set; }
+        public List<string>? SectionMaterialNames { get; set; }
+        public List<string>? SectionMaterialCodes { get; set; }
+        public List<int>? SectionMaterialSectionIndices { get; set; }
+        public List<int>? SectionMaterialSemesterIndices { get; set; }
 
         // فرص العمل
-        public List<string> JobOpportunityNames { get; set; }
+        public List<string>? JobOpportunityNames { get; set; }
     }
 
     public class HousingOptionFormModel
@@ -1524,6 +1552,10 @@ namespace BawabaUNI.Controllers.Admin
         public string PhoneNumber { get; set; }
 
         public string Description { get; set; }
-        public string ImagePath { get; set; }
+
+        // Change this from string to IFormFile
+        public IFormFile Image { get; set; }
+
+        
     }
 }
