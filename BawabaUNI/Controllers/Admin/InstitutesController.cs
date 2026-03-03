@@ -335,7 +335,8 @@ namespace BawabaUNI.Controllers.Admin
                             institute.GroupLink,
                             institute.HasHousing,
                             institute.ImageUrl,
-
+                            institute.Address,
+                            institute.DescriptionOfStudyPlan,
                           
 
                             institute.CreatedAt,
@@ -482,6 +483,7 @@ namespace BawabaUNI.Controllers.Admin
                 }
 
                 var institute = await _context.Faculties
+                    .Include(i => i.FacultyHousingOption)
                     .FirstOrDefaultAsync(i => i.Id == instituteId && i.UniversityId == null);
 
                 if (institute == null)
@@ -517,27 +519,97 @@ namespace BawabaUNI.Controllers.Admin
                 institute.GroupLink = model.GroupLink;
                 institute.HasHousing = model.HasHousing;
 
-               
-
                 institute.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
 
-                // حذف البيانات القديمة وإضافة الجديدة
-                await HardDeleteAllInstituteData(instituteId);
+                // 4. التعامل مع السكن - ✅ التعديل هنا
+                var housingCount = 0;
 
-                // إضافة البيانات الجديدة
-                if (model.HasHousing && model.HousingOptionNames != null && model.HousingOptionNames.Any())
+                // 4.1 حذف السكن المحدد من قبل المستخدم
+                if (model.DeletedHousingIds != null && model.DeletedHousingIds.Any())
                 {
-                    await AddHousingOptionsFromLists(instituteId, model);
+                    var housingToDelete = await _context.FacultyHousingOptions
+                        .Where(h => h.FacultyId == instituteId && model.DeletedHousingIds.Contains(h.Id))
+                        .ToListAsync();
+
+                    foreach (var housing in housingToDelete)
+                    {
+                        if (!string.IsNullOrEmpty(housing.ImagePath))
+                        {
+                            await DeleteFile(housing.ImagePath);
+                        }
+                    }
+                    _context.FacultyHousingOptions.RemoveRange(housingToDelete);
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"🗑️ تم حذف {housingToDelete.Count} خيار سكن");
                 }
 
+                // 4.2 إضافة/تحديث السكن
+                if (model.HousingOptionNames != null && model.HousingOptionNames.Any())
+                {
+                    for (int i = 0; i < model.HousingOptionNames.Count; i++)
+                    {
+                        if (string.IsNullOrEmpty(model.HousingOptionNames[i]))
+                            continue;
+
+                        var housingImagePath = "";
+                        if (model.HousingOptionImages != null && i < model.HousingOptionImages.Count &&
+                            model.HousingOptionImages[i] != null && model.HousingOptionImages[i].Length > 0)
+                        {
+                            housingImagePath = await SaveFile(model.HousingOptionImages[i], "housing-options");
+                        }
+
+                        var phoneNumber = model.HousingOptionPhoneNumbers != null && i < model.HousingOptionPhoneNumbers.Count
+                            ? model.HousingOptionPhoneNumbers[i]
+                            : "0000000000";
+
+                        var description = model.HousingOptionDescriptions != null && i < model.HousingOptionDescriptions.Count
+                            ? model.HousingOptionDescriptions[i]
+                            : "لا يوجد وصف";
+
+                        var housing = new FacultyHousingOption
+                        {
+                            Name = model.HousingOptionNames[i],
+                            PhoneNumber = phoneNumber,
+                            Description = description,
+                            ImagePath = housingImagePath,
+                            FacultyId = instituteId,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+
+                        _context.FacultyHousingOptions.Add(housing);
+                        housingCount++;
+                    }
+
+                    if (housingCount > 0)
+                    {
+                        await _context.SaveChangesAsync();
+                        Console.WriteLine($"✅ تم إضافة {housingCount} خيار سكن جديد");
+                    }
+                }
+
+                // تحديث HasHousing بناءً على وجود خيارات سكن
+                var remainingHousingCount = await _context.FacultyHousingOptions
+                    .CountAsync(h => h.FacultyId == instituteId && !h.IsDeleted);
+
+                institute.HasHousing = remainingHousingCount > 0;
+                await _context.SaveChangesAsync();
+
+                // باقي البيانات (التخصصات، خطة الدراسة، فرص العمل) - حذف وإضافة جديدة
+                await HardDeleteAllInstituteDataExceptHousing(instituteId);
+
+                // إضافة البيانات الجديدة
                 if (model.SpecializationNames != null)
                 {
                     await AddSpecializations(instituteId, model);
                 }
 
-                var studyPlanStats = await AddStudyPlan(instituteId, model);
+                if (model.YearNames != null && model.YearNames.Any())
+                {
+                    var studyPlanStats = await AddStudyPlan(instituteId, model);
+                }
 
                 if (model.JobOpportunityNames != null)
                 {
@@ -550,7 +622,9 @@ namespace BawabaUNI.Controllers.Admin
                 {
                     success = true,
                     message = "تم تحديث المعهد بنجاح",
-                    instituteId
+                    instituteId,
+                    housingAdded = housingCount,
+                    housingDeleted = model.DeletedHousingIds?.Count ?? 0
                 });
             }
             catch (Exception ex)
@@ -565,9 +639,61 @@ namespace BawabaUNI.Controllers.Admin
                 });
             }
         }
+        [HttpPut("{instituteId}/expenses-coordination")]
+        public async Task<IActionResult> UpdateExpensesAndCoordinationRequired(
+    int instituteId,
 
+    [FromBody] UpdateExpensesCoordinationRequiredDto model)
+        {
+            try
+            {
+                // التحقق من صحة البيانات
+                if (model == null)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "يرجى إدخال المصروفات والتنسيق بشكل صحيح"
+                    });
+                }
+
+                var faculty = await _context.Faculties
+                    .FirstOrDefaultAsync(f => f.Id == instituteId && !f.IsDeleted);
+
+                if (faculty == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "الكلية غير موجودة"
+                    });
+                }
+
+                faculty.Expenses = model.Expenses;
+                faculty.Coordination = model.Coordination;
+                faculty.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "تم تحديث المصروفات والتنسيق بنجاح",
+                    data = new
+                    {
+                        instituteId,
+                        facultyName = faculty.NameArabic,
+                        expenses = faculty.Expenses,
+                        coordination = faculty.Coordination
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
         #endregion
-
         #region Delete Institute
 
         [HttpDelete("{instituteId}")]
@@ -1335,52 +1461,48 @@ namespace BawabaUNI.Controllers.Admin
             return jobCount;
         }
 
-        private async Task HardDeleteAllInstituteData(int instituteId)
+        private async Task HardDeleteAllInstituteDataExceptHousing(int instituteId)
         {
-            Console.WriteLine($"🔥 حذف فعلي لجميع بيانات المعهد {instituteId}");
+            Console.WriteLine($"🔥 حذف فعلي لجميع بيانات المعهد {instituteId} (باستثناء السكن)");
 
             try
             {
-                // 1. حذف خيارات السكن
-                await _context.Database.ExecuteSqlRawAsync(
-                    "DELETE FROM FacultyHousingOptions WHERE FacultyId = {0}", instituteId);
-
-                // 2. حذف وسائط السنوات
+                // 1. حذف وسائط السنوات
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM StudyPlanMedia WHERE StudyPlanYearId IN (SELECT Id FROM StudyPlanYears WHERE FacultyId = {0})",
                     instituteId);
 
-                // 3. حذف مواد الأقسام
+                // 2. حذف مواد الأقسام
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM AcademicMaterials WHERE StudyPlanSectionId IN (SELECT Id FROM StudyPlanSections WHERE StudyPlanYearId IN (SELECT Id FROM StudyPlanYears WHERE FacultyId = {0}))",
                     instituteId);
 
-                // 4. حذف مواد السنوات المباشرة
+                // 3. حذف مواد السنوات المباشرة
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM AcademicMaterials WHERE StudyPlanYearId IN (SELECT Id FROM StudyPlanYears WHERE FacultyId = {0})",
                     instituteId);
 
-                // 5. حذف الأقسام
+                // 4. حذف الأقسام
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM StudyPlanSections WHERE StudyPlanYearId IN (SELECT Id FROM StudyPlanYears WHERE FacultyId = {0})",
                     instituteId);
 
-                // 6. حذف السنوات الدراسية
+                // 5. حذف السنوات الدراسية
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM StudyPlanYears WHERE FacultyId = {0}",
                     instituteId);
 
-                // 7. حذف التخصصات
+                // 6. حذف التخصصات
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM Specializations WHERE FacultyId = {0}",
                     instituteId);
 
-                // 8. حذف فرص العمل
+                // 7. حذف فرص العمل
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM JobOpportunities WHERE FacultyId = {0}",
                     instituteId);
 
-                Console.WriteLine("✅ تم الحذف الفعلي لجميع البيانات");
+                Console.WriteLine("✅ تم الحذف الفعلي لجميع البيانات (باستثناء السكن)");
             }
             catch (Exception ex)
             {
@@ -1388,7 +1510,6 @@ namespace BawabaUNI.Controllers.Admin
                 throw;
             }
         }
-
         private async Task<string> SaveFile(IFormFile file, string folder)
         {
             try
@@ -1491,7 +1612,7 @@ namespace BawabaUNI.Controllers.Admin
         public string GroupLink { get; set; }
         public string Address { get; set; }
         public string? DescriptionOfStudyPlan { get; set; }
-        public IFormFile Image { get; set; }
+        public IFormFile? Image { get; set; }
 
         // حقول إضافية للمعهد
         public bool HasHousing { get; set; }
@@ -1503,6 +1624,8 @@ namespace BawabaUNI.Controllers.Admin
         public List<string>? HousingOptionPhoneNumbers { get; set; }
         public List<string>? HousingOptionDescriptions { get; set; }
         public List<IFormFile>? HousingOptionImages { get; set; }
+        public List<int>? DeletedHousingIds { get; set; }  // ✅ IDs السكن المحذوف
+
 
         // التخصصات
         public List<string>? SpecializationNames { get; set; }

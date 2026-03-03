@@ -30,7 +30,7 @@ namespace BawabaUNI.Controllers.User
         public async Task<ActionResult<IEnumerable<FacultyNameDto>>> GetDistinctFacultyNames()
         {
             var faculties = await _context.Faculties
-                .Where(f => !f.IsDeleted)
+                .Where(f => !f.IsDeleted || f.UniversityId != null)
                 .Select(f => new
                 {
                     f.NameArabic,
