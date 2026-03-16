@@ -70,6 +70,7 @@ namespace BawabaUNI.Controllers.Admin
                     Coordination = model.Coordination,
                     Expenses = model.Expenses,
                     GroupLink = model.GroupLink,
+                    InstitutePageLink = model.InstitutePageLink,
                     DescriptionOfStudyPlan = model.DescriptionOfStudyPlan,
                     Address = model.Address,
                     ImageUrl = imageUrl,
@@ -333,6 +334,7 @@ namespace BawabaUNI.Controllers.Admin
                             institute.Expenses,
                             institute.Coordination,
                             institute.GroupLink,
+                            institute.InstitutePageLink,
                             institute.HasHousing,
                             institute.ImageUrl,
                             institute.Address,
@@ -517,6 +519,7 @@ namespace BawabaUNI.Controllers.Admin
                 institute.DescriptionOfStudyPlan = model.DescriptionOfStudyPlan;
                 institute.Address = model.Address;
                 institute.GroupLink = model.GroupLink;
+                institute.InstitutePageLink = model.InstitutePageLink;
                 institute.HasHousing = model.HasHousing;
 
                 institute.UpdatedAt = DateTime.UtcNow;
@@ -1609,7 +1612,9 @@ namespace BawabaUNI.Controllers.Admin
         public bool RequireAcceptanceTests { get; set; }
         public int Expenses { get; set; }
         public int Coordination { get; set; }
-        public string GroupLink { get; set; }
+        public string? GroupLink { get; set; }
+        public string? InstitutePageLink { get; set; }
+
         public string Address { get; set; }
         public string? DescriptionOfStudyPlan { get; set; }
         public IFormFile? Image { get; set; }

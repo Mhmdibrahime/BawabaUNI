@@ -42,6 +42,10 @@ namespace BawabaUNI.Models.Data
         public DbSet<Student> Students { get; set; }
         public DbSet<StudentCourse> StudentCourses { get; set; }
         public DbSet<ConsultationRequest> ConsultationRequests { get; set; }
+        public DbSet<StudyAbroad> StudyAbroads { get; set; }
+        public DbSet<DocumentRequiredForStudyAbroad> DocumentsRequiredForStudyAbroad { get; set; }
+        public DbSet<FacultyForAbroad> FacultiesForAbroad { get; set; }
+        public DbSet<HousingOptionForAbroad> HousingOptionsForAbroad { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -29,8 +29,8 @@ namespace BawabaUNI.Controllers.User
             public int? ProgramsNumber { get; set; }
             public int? Rank { get; set; }
             public bool RequireAcceptanceTests { get; set; }
-            public int Expenses { get; set; }
-            public int Coordination { get; set; }
+            public decimal Expenses { get; set; }
+            public decimal Coordination { get; set; }
 
             [MaxLength(500)]
             public string? GroupLink { get; set; }
@@ -112,8 +112,8 @@ namespace BawabaUNI.Controllers.User
             public string DurationOfStudy { get; set; }
             public int? ProgramsNumber { get; set; }
             public int? Rank { get; set; }
-            public int Expenses { get; set; }
-            public int Coordination { get; set; }
+            public decimal Expenses { get; set; }
+            public decimal Coordination { get; set; }
 
             [MaxLength(500)]
             public string? GroupLink { get; set; }

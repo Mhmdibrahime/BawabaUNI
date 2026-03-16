@@ -487,8 +487,8 @@ namespace BawabaUNI.Controllers.User
             public string NameEnglish { get; set; }
             public string Description { get; set; }
             public string? ImagePath { get; set; }
-            public int Expenses { get; set; }
-            public int Coordination { get; set; }
+            public decimal Expenses { get; set; }
+            public decimal Coordination { get; set; }
 
         }
     }

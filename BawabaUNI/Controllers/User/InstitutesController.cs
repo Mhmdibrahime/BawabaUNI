@@ -36,8 +36,8 @@ namespace BawabaUNI.Controllers.User
             public int? Rank { get; set; }
             public bool RequireAcceptanceTests { get; set; }
             public DateTime CreatedDate { get; set; }
-            public int Expenses { get; set; }
-            public int Coordination { get; set; }
+            public decimal Expenses { get; set; }
+            public decimal Coordination { get; set; }
             public string GroupLink { get; set; }
 
             // Institute specific fields
@@ -80,9 +80,11 @@ namespace BawabaUNI.Controllers.User
             public int? Rank { get; set; }
             public bool RequireAcceptanceTests { get; set; }
             public DateTime CreatedDate { get; set; }
-            public int Expenses { get; set; }
-            public int Coordination { get; set; }
-            public string GroupLink { get; set; }
+            public decimal Expenses { get; set; }
+            public decimal Coordination { get; set; }
+            public string? GroupLink { get; set; }
+            public string? InstitutePageLink { get; set; }
+
 
             // Institute specific fields
             public string Type { get; set; }
@@ -401,6 +403,7 @@ namespace BawabaUNI.Controllers.User
                         Expenses = i.Expenses,
                         Coordination = i.Coordination,
                         GroupLink = i.GroupLink,
+                        InstitutePageLink = i.InstitutePageLink,
                         Type = i.Type,
                         HasHousing = i.HasHousing
                     })

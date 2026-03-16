@@ -30,11 +30,10 @@ namespace BawabaUNI.Controllers.User
         public async Task<ActionResult<IEnumerable<FacultyNameDto>>> GetDistinctFacultyNames()
         {
             var faculties = await _context.Faculties
-                .Where(f => !f.IsDeleted || f.UniversityId != null)
+                .Where(f => !f.IsDeleted && f.UniversityId != null )
                 .Select(f => new
                 {
-                    f.NameArabic,
-                    f.NameEnglish
+                    f.NameArabic
                 })
                 .Distinct()
                 .OrderBy(f => f.NameArabic)
@@ -42,8 +41,7 @@ namespace BawabaUNI.Controllers.User
 
             var result = faculties.Select(f => new FacultyNameDto
             {
-                NameArabic = f.NameArabic,
-                NameEnglish = f.NameEnglish
+                NameArabic = f.NameArabic
             }).ToList();
 
             return Ok(result);
@@ -60,7 +58,7 @@ namespace BawabaUNI.Controllers.User
 
             // Search in both Arabic and English names
             var universities = await _context.Faculties
-                .Where(f => !f.IsDeleted &&
+                .Where(f => !f.IsDeleted && f.UniversityId != null &&
                            (f.NameArabic.Contains(name) || f.NameEnglish.Contains(name)))
                 .Select(f => new
                 {
@@ -539,8 +537,8 @@ namespace BawabaUNI.Controllers.User
         public int? ProgramsNumber { get; set; }
         public int? Rank { get; set; }
         public bool RequireAcceptanceTests { get; set; }
-        public int Expenses { get; set; }
-        public int Coordination { get; set; }
+        public decimal Expenses { get; set; }
+        public decimal Coordination { get; set; }
         public string? GroupLink { get; set; }
         public int SpecializationsCount { get; set; }
         public int JobOpportunitiesCount { get; set; }
@@ -560,8 +558,8 @@ namespace BawabaUNI.Controllers.User
         public int? ProgramsNumber { get; set; }
         public int? Rank { get; set; }
         public bool RequireAcceptanceTests { get; set; }
-        public int Expenses { get; set; }
-        public int Coordination { get; set; }
+        public decimal Expenses { get; set; }
+        public decimal Coordination { get; set; }
         public string? GroupLink { get; set; }
         public List<SpecializationBasicDto> Specializations { get; set; }
         public List<JobOpportunityBasicDto> JobOpportunities { get; set; }
@@ -616,8 +614,8 @@ namespace BawabaUNI.Controllers.User
         public int FacultyId { get; set; }
         public string FacultyNameArabic { get; set; }
         public string FacultyNameEnglish { get; set; }
-        public int Coordination { get; set; }
-        public int Expenses { get; set; }
+        public decimal Coordination { get; set; }
+        public decimal Expenses { get; set; }
         public string DurationOfStudy { get; set; }
         public int? ProgramsNumber { get; set; }
         public bool RequireAcceptanceTests { get; set; }
@@ -636,9 +634,9 @@ namespace BawabaUNI.Controllers.User
         public string UniversityType { get; set; }
         public string UniversityLogo { get; set; }
         public int MatchingFacultiesCount { get; set; }
-        public int MinCoordination { get; set; }
-        public int MaxCoordination { get; set; }
-        public int AverageCoordination { get; set; }
+        public decimal MinCoordination { get; set; }
+        public decimal MaxCoordination { get; set; }
+        public decimal AverageCoordination { get; set; }
         public List<FacultyMatchDto> Faculties { get; set; }
     }
 
@@ -658,9 +656,9 @@ namespace BawabaUNI.Controllers.User
         public int TotalFaculties { get; set; }
         public int FacultiesMatchingCoordination { get; set; }
         public double Percentage { get; set; }
-        public int MinCoordination { get; set; }
-        public int MaxCoordination { get; set; }
-        public int AverageCoordination { get; set; }
+        public decimal MinCoordination { get; set; }
+        public decimal MaxCoordination { get; set; }
+        public decimal AverageCoordination { get; set; }
         public int UniversitiesCount { get; set; }
     }
 

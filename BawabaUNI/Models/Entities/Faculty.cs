@@ -39,11 +39,14 @@ namespace BawabaUNI.Models.Entities
 
         [Required]
         public bool RequireAcceptanceTests { get; set; }
-        public int Expenses { get; set; }
-        public int Coordination  { get; set; }
+        public decimal Expenses { get; set; }
+        public decimal Coordination  { get; set; }
 
         [MaxLength(500)]
         public string? GroupLink { get; set; }
+
+        [MaxLength(500)]
+        public string? InstitutePageLink { get; set; }
 
         [MaxLength(500)]
         public string? Address { get; set; }
