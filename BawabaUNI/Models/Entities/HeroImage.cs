@@ -8,7 +8,13 @@ namespace BawabaUNI.Models.Entities
     {
         [Required]
         [MaxLength(500)]
-        public string ImagePath { get; set; }
+        public string? MobileImagePath { get; set; }
+        [Required]
+        [MaxLength(500)]
+        public string? DesktobImagePath { get; set; }
+        [Required]
+        [MaxLength(500)]
+        public string? TabletImagePath { get; set; }
 
         [Required]
         public bool IsActive { get; set; } = true;

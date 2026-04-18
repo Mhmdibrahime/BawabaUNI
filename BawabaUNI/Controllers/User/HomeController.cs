@@ -62,6 +62,7 @@ namespace BawabaUNI.Controllers.User
 
         // 1. الحصول على الصور الرئيسية النشطة (Hero Images)
         [HttpGet("hero")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetHeroImages()
         {
             var heroImages = await _context.HeroImages
@@ -71,13 +72,24 @@ namespace BawabaUNI.Controllers.User
                 .Select(hi => new
                 {
                     hi.Id,
-                    hi.ImagePath,
+                    MobileImagePath = hi.MobileImagePath,
+                    MobileImageUrl = $"{Request.Scheme}://{Request.Host}{hi.MobileImagePath}",
+                    DesktopImagePath = hi.DesktobImagePath,
+                    DesktopImageUrl = $"{Request.Scheme}://{Request.Host}{hi.DesktobImagePath}",
+                    TabletImagePath = hi.TabletImagePath,
+                    TabletImageUrl = $"{Request.Scheme}://{Request.Host}{hi.TabletImagePath}",
                     hi.IsActive,
-                    hi.CreatedAt
+                    hi.CreatedAt,
+                    hi.UpdatedAt
                 })
                 .ToListAsync();
 
-            return Ok(heroImages);
+            return Ok(new
+            {
+                Success = true,
+                Message = "تم جلب الصور الرئيسية بنجاح",
+                Data = heroImages
+            });
         }
         // Quick university search for autocomplete
         [HttpGet("universities/quick-search")]
@@ -274,12 +286,19 @@ namespace BawabaUNI.Controllers.User
         public async Task<IActionResult> GetDashboardImages()
         {
             var heroImages = await _context.HeroImages
-                .Where(u => !u.IsDeleted)
-                .Where(hi => hi.IsActive)
-                .OrderBy(hi => hi.Id)
-                .Select(hi => new { hi.Id, hi.ImagePath })
-                .Take(3)
-                .ToListAsync();
+        .Where(u => !u.IsDeleted)
+        .Where(hi => hi.IsActive)
+        .OrderBy(hi => hi.Id)
+        .Select(hi => new
+        {
+            hi.Id,
+            MobileImageUrl = $"{Request.Scheme}://{Request.Host}{hi.MobileImagePath}",
+            DesktopImageUrl = $"{Request.Scheme}://{Request.Host}{hi.DesktobImagePath}",
+            TabletImageUrl = $"{Request.Scheme}://{Request.Host}{hi.TabletImagePath}",
+            hi.IsActive
+        })
+        .Take(3)
+        .ToListAsync();
 
             var latestArticles = await _context.Articles.Where(a => !a.IsDeleted)
                 .Where(a => a.Date <= DateTime.Now)

@@ -463,7 +463,6 @@ namespace BawabaUNI.Controllers.Admin
         #endregion
 
         #region Update Institute
-
         [HttpPut("{instituteId}")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> UpdateInstitute(int instituteId, [FromForm] InstituteFormModel model)
@@ -491,7 +490,7 @@ namespace BawabaUNI.Controllers.Admin
                 if (institute == null)
                     return NotFound(new { success = false, message = "المعهد غير موجود" });
 
-                // معالجة الصورة
+                // معالجة الصورة الرئيسية
                 if (model.Image != null)
                 {
                     if (!string.IsNullOrEmpty(institute.ImageUrl))
@@ -521,15 +520,77 @@ namespace BawabaUNI.Controllers.Admin
                 institute.GroupLink = model.GroupLink;
                 institute.InstitutePageLink = model.InstitutePageLink;
                 institute.HasHousing = model.HasHousing;
-
                 institute.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
 
-                // 4. التعامل مع السكن - ✅ التعديل هنا
-                var housingCount = 0;
+                // ========== 1. 🗑️ حذف التخصصات المحددة ==========
+                var deletedSpecializationsCount = 0;
+                if (model.DeletedSpecializationIds != null && model.DeletedSpecializationIds.Any())
+                {
+                    var specsToDelete = await _context.Specializations
+                        .Where(s => model.DeletedSpecializationIds.Contains(s.Id) && s.FacultyId == instituteId)
+                        .ToListAsync();
 
-                // 4.1 حذف السكن المحدد من قبل المستخدم
+                    _context.Specializations.RemoveRange(specsToDelete);
+                    deletedSpecializationsCount = specsToDelete.Count;
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"✅ تم حذف {deletedSpecializationsCount} تخصص");
+                }
+
+                // ========== 2. 🗑️ حذف فرص العمل المحددة ==========
+                var deletedJobsCount = 0;
+                if (model.DeletedJobOpportunityIds != null && model.DeletedJobOpportunityIds.Any())
+                {
+                    var jobsToDelete = await _context.JobOpportunities
+                        .Where(j => model.DeletedJobOpportunityIds.Contains(j.Id) && j.FacultyId == instituteId)
+                        .ToListAsync();
+
+                    _context.JobOpportunities.RemoveRange(jobsToDelete);
+                    deletedJobsCount = jobsToDelete.Count;
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"✅ تم حذف {deletedJobsCount} فرصة عمل");
+                }
+
+                // ========== 3. 🗑️ حذف السنوات المحددة (مع كل محتوياتها) ==========
+                var deletedYearsCount = 0;
+                if (model.DeletedYearIds != null && model.DeletedYearIds.Any())
+                {
+                    foreach (var yearId in model.DeletedYearIds)
+                    {
+                        await DeleteStudyYearWithAllContents(yearId, instituteId);
+                        deletedYearsCount++;
+                    }
+                    Console.WriteLine($"✅ تم حذف {deletedYearsCount} سنة");
+                }
+
+                // ========== 4. 🗑️ حذف الوسائط المحددة ==========
+                var deletedMediaCount = 0;
+                if (model.DeletedMediaIds != null && model.DeletedMediaIds.Any())
+                {
+                    var mediaToDelete = await _context.StudyPlanMedia
+                        .Include(m => m.StudyPlanYear)
+                        .Where(m => model.DeletedMediaIds.Contains(m.Id) &&
+                                   m.StudyPlanYear.FacultyId == instituteId)
+                        .ToListAsync();
+
+                    foreach (var media in mediaToDelete)
+                    {
+                        if (!string.IsNullOrEmpty(media.MediaLink))
+                        {
+                            await DeleteFile(media.MediaLink);
+                            Console.WriteLine($"🗑️ تم حذف ملف الوسائط: {media.MediaLink}");
+                        }
+                    }
+
+                    _context.StudyPlanMedia.RemoveRange(mediaToDelete);
+                    deletedMediaCount = mediaToDelete.Count;
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"✅ تم حذف {deletedMediaCount} وسائط");
+                }
+
+                // ========== 5. 🗑️ حذف السكن المحدد ==========
+                var deletedHousingCount = 0;
                 if (model.DeletedHousingIds != null && model.DeletedHousingIds.Any())
                 {
                     var housingToDelete = await _context.FacultyHousingOptions
@@ -544,90 +605,37 @@ namespace BawabaUNI.Controllers.Admin
                         }
                     }
                     _context.FacultyHousingOptions.RemoveRange(housingToDelete);
+                    deletedHousingCount = housingToDelete.Count;
                     await _context.SaveChangesAsync();
-                    Console.WriteLine($"🗑️ تم حذف {housingToDelete.Count} خيار سكن");
+                    Console.WriteLine($"✅ تم حذف {deletedHousingCount} خيار سكن");
                 }
 
-                // 4.2 إضافة/تحديث السكن
-                if (model.HousingOptionNames != null && model.HousingOptionNames.Any())
-                {
-                    for (int i = 0; i < model.HousingOptionNames.Count; i++)
-                    {
-                        if (string.IsNullOrEmpty(model.HousingOptionNames[i]))
-                            continue;
+                // ========== 6. ✅ تحديث أو إضافة البيانات الجديدة (المنطق الجديد) ==========
+                Console.WriteLine("🔄 تحديث وإضافة البيانات الجديدة...");
+                var result = await UpdateOrAddInstituteData(instituteId, model);
 
-                        var housingImagePath = "";
-                        if (model.HousingOptionImages != null && i < model.HousingOptionImages.Count &&
-                            model.HousingOptionImages[i] != null && model.HousingOptionImages[i].Length > 0)
-                        {
-                            housingImagePath = await SaveFile(model.HousingOptionImages[i], "housing-options");
-                        }
-
-                        var phoneNumber = model.HousingOptionPhoneNumbers != null && i < model.HousingOptionPhoneNumbers.Count
-                            ? model.HousingOptionPhoneNumbers[i]
-                            : "0000000000";
-
-                        var description = model.HousingOptionDescriptions != null && i < model.HousingOptionDescriptions.Count
-                            ? model.HousingOptionDescriptions[i]
-                            : "لا يوجد وصف";
-
-                        var housing = new FacultyHousingOption
-                        {
-                            Name = model.HousingOptionNames[i],
-                            PhoneNumber = phoneNumber,
-                            Description = description,
-                            ImagePath = housingImagePath,
-                            FacultyId = instituteId,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
-                        };
-
-                        _context.FacultyHousingOptions.Add(housing);
-                        housingCount++;
-                    }
-
-                    if (housingCount > 0)
-                    {
-                        await _context.SaveChangesAsync();
-                        Console.WriteLine($"✅ تم إضافة {housingCount} خيار سكن جديد");
-                    }
-                }
-
-                // تحديث HasHousing بناءً على وجود خيارات سكن
+                // تحديث HasHousing بناءً على السكن الجديد المضاف
                 var remainingHousingCount = await _context.FacultyHousingOptions
                     .CountAsync(h => h.FacultyId == instituteId && !h.IsDeleted);
-
                 institute.HasHousing = remainingHousingCount > 0;
                 await _context.SaveChangesAsync();
 
-                // باقي البيانات (التخصصات، خطة الدراسة، فرص العمل) - حذف وإضافة جديدة
-                await HardDeleteAllInstituteDataExceptHousing(instituteId);
-
-                // إضافة البيانات الجديدة
-                if (model.SpecializationNames != null)
-                {
-                    await AddSpecializations(instituteId, model);
-                }
-
-                if (model.YearNames != null && model.YearNames.Any())
-                {
-                    var studyPlanStats = await AddStudyPlan(instituteId, model);
-                }
-
-                if (model.JobOpportunityNames != null)
-                {
-                    await AddJobOpportunities(instituteId, model);
-                }
-
                 await transaction.CommitAsync();
+
+                Console.WriteLine($"🎉 تم تحديث المعهد بنجاح!");
 
                 return Ok(new
                 {
                     success = true,
                     message = "تم تحديث المعهد بنجاح",
                     instituteId,
-                    housingAdded = housingCount,
-                    housingDeleted = model.DeletedHousingIds?.Count ?? 0
+                    statistics = result,
+                    deletedSpecializationsCount,
+                    deletedJobsCount,
+                    deletedYearsCount,
+                    deletedMediaCount,
+                    deletedHousingCount,
+                    housingAdded = model.HousingOptionNames?.Count(h => !string.IsNullOrEmpty(h)) ?? 0
                 });
             }
             catch (Exception ex)
@@ -641,6 +649,745 @@ namespace BawabaUNI.Controllers.Admin
                     error = ex.Message
                 });
             }
+        }
+        // تحديث أو إضافة البيانات الجديدة (المنطق الجديد - يدعم التحديث)
+        private async Task<object> UpdateOrAddInstituteData(int instituteId, InstituteFormModel model)
+        {
+            var specCount = 0;
+            var yearCount = 0;
+            var semesterCount = 0;
+            var materialCount = 0;
+            var sectionCount = 0;
+            var jobCount = 0;
+            var housingCount = 0;
+
+            // 1. إضافة التخصصات الجديدة
+            if (model.SpecializationNames != null)
+            {
+                for (int i = 0; i < model.SpecializationNames.Count; i++)
+                {
+                    if (string.IsNullOrEmpty(model.SpecializationNames[i])) continue;
+
+                    var spec = new Specialization
+                    {
+                        Name = model.SpecializationNames[i],
+                        YearsNumber = i < model.SpecializationYearsNumbers.Count ?
+                            model.SpecializationYearsNumbers[i] : 2,
+                        Description = i < model.SpecializationDescriptions.Count ?
+                            model.SpecializationDescriptions[i] : "",
+                        AcademicQualification = "",
+                        FacultyId = instituteId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.Specializations.Add(spec);
+                    specCount++;
+                }
+
+                if (specCount > 0)
+                {
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"✅ تم إضافة {specCount} تخصص جديد");
+                }
+            }
+
+            // 2. إضافة فرص العمل الجديدة
+            if (model.JobOpportunityNames != null)
+            {
+                for (int i = 0; i < model.JobOpportunityNames.Count; i++)
+                {
+                    if (string.IsNullOrEmpty(model.JobOpportunityNames[i])) continue;
+
+                    var job = new JobOpportunity
+                    {
+                        Name = model.JobOpportunityNames[i],
+                        FacultyId = instituteId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.JobOpportunities.Add(job);
+                    jobCount++;
+                }
+
+                if (jobCount > 0)
+                {
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"✅ تم إضافة {jobCount} فرصة عمل جديدة");
+                }
+            }
+
+            // 3. إضافة السكن الجديد
+            if (model.HousingOptionNames != null)
+            {
+                for (int i = 0; i < model.HousingOptionNames.Count; i++)
+                {
+                    if (string.IsNullOrEmpty(model.HousingOptionNames[i])) continue;
+
+                    string imagePath = null;
+                    if (model.HousingOptionImages != null && i < model.HousingOptionImages.Count &&
+                        model.HousingOptionImages[i] != null && model.HousingOptionImages[i].Length > 0)
+                    {
+                        imagePath = await SaveFile(model.HousingOptionImages[i], "housing-options");
+                        Console.WriteLine($"📁 تم رفع صورة السكن: {imagePath}");
+                    }
+
+                    string phoneNumber = model.HousingOptionPhoneNumbers != null && i < model.HousingOptionPhoneNumbers.Count
+                        ? model.HousingOptionPhoneNumbers[i]
+                        : "";
+
+                    string description = model.HousingOptionDescriptions != null && i < model.HousingOptionDescriptions.Count
+                        ? model.HousingOptionDescriptions[i]
+                        : "";
+
+                    var housing = new FacultyHousingOption
+                    {
+                        Name = model.HousingOptionNames[i],
+                        PhoneNumber = phoneNumber,
+                        Description = description,
+                        ImagePath = imagePath,
+                        FacultyId = instituteId,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    _context.FacultyHousingOptions.Add(housing);
+                    housingCount++;
+                }
+
+                if (housingCount > 0)
+                {
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"✅ تم إضافة {housingCount} خيار سكن جديد");
+                }
+            }
+
+            // 4. تحديث أو إضافة السنوات (المنطق الجديد)
+            if (model.YearNames != null && model.YearNames.Count > 0)
+            {
+                for (int yearIndex = 0; yearIndex < model.YearNames.Count; yearIndex++)
+                {
+                    if (string.IsNullOrEmpty(model.YearNames[yearIndex])) continue;
+
+                    var yearNumber = yearIndex + 1;
+
+                    // 🔍 البحث عن سنة موجودة بنفس الرقم
+                    var existingYear = await _context.StudyPlanYears
+                        .FirstOrDefaultAsync(y => y.FacultyId == instituteId && y.YearNumber == yearNumber && !y.IsDeleted);
+
+                    StudyPlanYear studyPlanYear;
+
+                    if (existingYear != null)
+                    {
+                        // ✅ تحديث السنة الموجودة
+                        studyPlanYear = existingYear;
+                        studyPlanYear.YearName = model.YearNames[yearIndex];
+                        studyPlanYear.Type = (yearIndex < model.YearHasSpecialization.Count &&
+                                           model.YearHasSpecialization[yearIndex]) ? "Specialized" : "General";
+                        studyPlanYear.UpdatedAt = DateTime.UtcNow;
+
+                        Console.WriteLine($"✅ تم تحديث السنة الموجودة: السنة رقم {yearNumber} - {studyPlanYear.YearName}");
+
+                        // مسح البيانات القديمة المرتبطة بالسنة
+                        await ClearYearData(studyPlanYear.Id);
+                    }
+                    else
+                    {
+                        // ✅ إضافة سنة جديدة
+                        string yearName = model.YearNames[yearIndex];
+                        int suffix = 1;
+                        string finalYearName = yearName;
+
+                        while (await _context.StudyPlanYears.AnyAsync(y => y.FacultyId == instituteId && y.YearName == finalYearName))
+                        {
+                            finalYearName = $"{yearName} ({suffix})";
+                            suffix++;
+                        }
+
+                        studyPlanYear = new StudyPlanYear
+                        {
+                            YearName = finalYearName,
+                            YearNumber = yearNumber,
+                            Type = (yearIndex < model.YearHasSpecialization.Count &&
+                                   model.YearHasSpecialization[yearIndex]) ? "Specialized" : "General",
+                            FacultyId = instituteId,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        _context.StudyPlanYears.Add(studyPlanYear);
+                        await _context.SaveChangesAsync();
+
+                        Console.WriteLine($"✅ تم إضافة سنة جديدة: السنة رقم {yearNumber} - {studyPlanYear.YearName}");
+                    }
+
+                    var studyPlanYearId = studyPlanYear.Id;
+                    yearCount++;
+
+                    // 📁 إضافة الوسائط لهذه السنة
+                    if (model.MediaTypes != null && model.MediaYearIndices != null)
+                    {
+                        for (int mediaIndex = 0; mediaIndex < model.MediaYearIndices.Count; mediaIndex++)
+                        {
+                            if (model.MediaYearIndices[mediaIndex] == yearIndex &&
+                                mediaIndex < model.MediaTypes.Count &&
+                                !string.IsNullOrEmpty(model.MediaTypes[mediaIndex]))
+                            {
+                                string mediaLink = "";
+
+                                if (model.MediaFiles != null && mediaIndex < model.MediaFiles.Count &&
+                                    model.MediaFiles[mediaIndex] != null && model.MediaFiles[mediaIndex].Length > 0)
+                                {
+                                    mediaLink = await SaveFile(model.MediaFiles[mediaIndex], "studyplan-media");
+                                    Console.WriteLine($"📁 تم رفع ملف جديد: {mediaLink}");
+                                }
+
+                                var media = new StudyPlanMedia
+                                {
+                                    MediaType = model.MediaTypes[mediaIndex],
+                                    MediaLink = mediaLink,
+                                    VisitLink = model.MediaVisitLinks?[mediaIndex] ?? "",
+                                    StudyPlanYearId = studyPlanYearId,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+
+                                _context.StudyPlanMedia.Add(media);
+                                Console.WriteLine($"✅ تم إضافة وسائط للسنة رقم {yearNumber}");
+                            }
+                        }
+                    }
+
+                    // 📚 إضافة الفصول والمواد العامة
+                    if (model.SemesterNames != null && model.SemesterYearIndices != null)
+                    {
+                        for (int semIndex = 0; semIndex < model.SemesterYearIndices.Count; semIndex++)
+                        {
+                            if (model.SemesterYearIndices[semIndex] == yearIndex &&
+                                semIndex < model.SemesterNames.Count &&
+                                !string.IsNullOrEmpty(model.SemesterNames[semIndex]))
+                            {
+                                semesterCount++;
+
+                                if (model.SemesterMaterialNames != null &&
+                                    model.SemesterMaterialSemesterIndices != null)
+                                {
+                                    for (int matIndex = 0; matIndex < model.SemesterMaterialSemesterIndices.Count; matIndex++)
+                                    {
+                                        if (model.SemesterMaterialSemesterIndices[matIndex] == semIndex &&
+                                            matIndex < model.SemesterMaterialNames.Count &&
+                                            !string.IsNullOrEmpty(model.SemesterMaterialNames[matIndex]))
+                                        {
+                                            string materialCode = matIndex < model.SemesterMaterialCodes.Count &&
+                                                               !string.IsNullOrEmpty(model.SemesterMaterialCodes[matIndex])
+                                                ? model.SemesterMaterialCodes[matIndex]
+                                                : $"MAT-{yearNumber}-{semIndex + 1}-{matIndex + 1}";
+
+                                            var material = new AcademicMaterial
+                                            {
+                                                Name = model.SemesterMaterialNames[matIndex],
+                                                Code = materialCode,
+                                                Semester = semIndex + 1,
+                                                Type = "Mandatory",
+                                                CreditHours = 3,
+                                                StudyPlanYearId = studyPlanYearId,
+                                                StudyPlanSectionId = null,
+                                                CreatedAt = DateTime.UtcNow
+                                            };
+
+                                            _context.AcademicMaterials.Add(material);
+                                            materialCount++;
+                                            Console.WriteLine($"📚 تم إضافة مادة عامة: {material.Name} (السنة {yearNumber}, الفصل {material.Semester})");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 📂 إضافة الأقسام والمواد المتخصصة
+                    if (model.SectionNames != null && model.SectionYearIndices != null)
+                    {
+                        for (int secIndex = 0; secIndex < model.SectionYearIndices.Count; secIndex++)
+                        {
+                            if (model.SectionYearIndices[secIndex] == yearIndex &&
+                                secIndex < model.SectionNames.Count &&
+                                !string.IsNullOrEmpty(model.SectionNames[secIndex]))
+                            {
+                                string sectionCode = secIndex < model.SectionCodes.Count &&
+                                                   !string.IsNullOrEmpty(model.SectionCodes[secIndex])
+                                    ? model.SectionCodes[secIndex]
+                                    : $"SEC-{yearNumber}-{secIndex + 1}";
+
+                                var section = new StudyPlanSection
+                                {
+                                    Name = model.SectionNames[secIndex],
+                                    Code = sectionCode,
+                                    StudyPlanYearId = studyPlanYearId,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+
+                                _context.StudyPlanSections.Add(section);
+                                await _context.SaveChangesAsync();
+
+                                var sectionId = section.Id;
+                                sectionCount++;
+                                Console.WriteLine($"✅ تم إنشاء قسم جديد: {section.Name} (السنة {yearNumber})");
+
+                                if (model.SectionMaterialNames != null &&
+                                    model.SectionMaterialSectionIndices != null)
+                                {
+                                    for (int matIndex = 0; matIndex < model.SectionMaterialSectionIndices.Count; matIndex++)
+                                    {
+                                        if (model.SectionMaterialSectionIndices[matIndex] == secIndex &&
+                                            matIndex < model.SectionMaterialNames.Count &&
+                                            !string.IsNullOrEmpty(model.SectionMaterialNames[matIndex]))
+                                        {
+                                            int materialSemester = 1;
+                                            if (model.SectionMaterialSemesterIndices != null &&
+                                                matIndex < model.SectionMaterialSemesterIndices.Count)
+                                            {
+                                                materialSemester = model.SectionMaterialSemesterIndices[matIndex] + 1;
+                                            }
+
+                                            string materialCode = matIndex < model.SectionMaterialCodes.Count &&
+                                                               !string.IsNullOrEmpty(model.SectionMaterialCodes[matIndex])
+                                                ? model.SectionMaterialCodes[matIndex]
+                                                : $"MAT-SEC-{yearNumber}-{secIndex + 1}-{matIndex + 1}";
+
+                                            var material = new AcademicMaterial
+                                            {
+                                                Name = model.SectionMaterialNames[matIndex],
+                                                Code = materialCode,
+                                                Semester = materialSemester,
+                                                Type = "Mandatory",
+                                                CreditHours = 3,
+                                                StudyPlanYearId = null,
+                                                StudyPlanSectionId = sectionId,
+                                                CreatedAt = DateTime.UtcNow
+                                            };
+
+                                            _context.AcademicMaterials.Add(material);
+                                            materialCount++;
+                                            Console.WriteLine($"📚 تم إضافة مادة متخصصة: {material.Name} (القسم: {section.Name})");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            return new
+            {
+                specializations = specCount,
+                studyYears = yearCount,
+                semesters = semesterCount,
+                sections = sectionCount,
+                materials = materialCount,
+                jobOpportunities = jobCount,
+                housingOptions = housingCount
+            };
+        }
+        // حذف جميع البيانات المرتبطة بسنة دراسية (قبل تحديثها)
+        private async Task ClearYearData(int studyPlanYearId)
+        {
+            Console.WriteLine($"🗑️ حذف البيانات القديمة للسنة ID: {studyPlanYearId}");
+
+            
+
+            // 2. حذف مواد الأقسام
+            var sectionMaterials = await _context.AcademicMaterials
+                .Where(m => m.StudyPlanSection != null && m.StudyPlanSection.StudyPlanYearId == studyPlanYearId)
+                .ToListAsync();
+            _context.AcademicMaterials.RemoveRange(sectionMaterials);
+
+            // 3. حذف الأقسام
+            var sections = await _context.StudyPlanSections
+                .Where(s => s.StudyPlanYearId == studyPlanYearId)
+                .ToListAsync();
+            _context.StudyPlanSections.RemoveRange(sections);
+
+            // 4. حذف مواد السنة العامة
+            var yearMaterials = await _context.AcademicMaterials
+                .Where(m => m.StudyPlanYearId == studyPlanYearId)
+                .ToListAsync();
+            _context.AcademicMaterials.RemoveRange(yearMaterials);
+
+            await _context.SaveChangesAsync();
+            Console.WriteLine($"✅ تم حذف جميع البيانات القديمة للسنة");
+        }
+
+        // 🆕 حذف سنة دراسية مع كل محتوياتها (للمعهد)
+        private async Task DeleteStudyYearWithAllContents(int studyYearId, int instituteId)
+        {
+            Console.WriteLine($"🗑️ حذف السنة الدراسية ID: {studyYearId}");
+
+            var studyYear = await _context.StudyPlanYears
+                .FirstOrDefaultAsync(y => y.Id == studyYearId && y.FacultyId == instituteId);
+
+            if (studyYear == null)
+            {
+                Console.WriteLine($"⚠️ السنة {studyYearId} غير موجودة");
+                return;
+            }
+
+            try
+            {
+                // 1. حذف وسائط السنة
+                var mediaList = await _context.StudyPlanMedia
+                    .Where(m => m.StudyPlanYearId == studyYearId)
+                    .ToListAsync();
+
+                foreach (var media in mediaList)
+                {
+                    if (!string.IsNullOrEmpty(media.MediaLink))
+                    {
+                        await DeleteFile(media.MediaLink);
+                    }
+                }
+                _context.StudyPlanMedia.RemoveRange(mediaList);
+
+                // 2. حذف مواد الأقسام
+                var sectionMaterials = await _context.AcademicMaterials
+                    .Where(m => m.StudyPlanSection != null && m.StudyPlanSection.StudyPlanYearId == studyYearId)
+                    .ToListAsync();
+                _context.AcademicMaterials.RemoveRange(sectionMaterials);
+
+                // 3. حذف الأقسام
+                var sections = await _context.StudyPlanSections
+                    .Where(s => s.StudyPlanYearId == studyYearId)
+                    .ToListAsync();
+                _context.StudyPlanSections.RemoveRange(sections);
+
+                // 4. حذف مواد السنة
+                var yearMaterials = await _context.AcademicMaterials
+                    .Where(m => m.StudyPlanYearId == studyYearId)
+                    .ToListAsync();
+                _context.AcademicMaterials.RemoveRange(yearMaterials);
+
+                // 5. حذف السنة
+                _context.StudyPlanYears.Remove(studyYear);
+
+                await _context.SaveChangesAsync();
+                Console.WriteLine($"✅ تم حذف السنة {studyYear.YearName} بالكامل");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ خطأ في حذف السنة: {ex.Message}");
+                throw;
+            }
+        }
+        // 🆕 إضافة بيانات المعهد الجديدة (كل اللي في الموديل)
+        private async Task<object> AddInstituteDataExactlyLikeAdd(int instituteId, InstituteFormModel model)
+        {
+            var specCount = 0;
+            var yearCount = 0;
+            var semesterCount = 0;
+            var materialCount = 0;
+            var sectionCount = 0;
+            var jobCount = 0;
+            var housingCount = 0;
+
+            // 1. إضافة التخصصات (كل اللي في الموديل)
+            if (model.SpecializationNames != null)
+            {
+                for (int i = 0; i < model.SpecializationNames.Count; i++)
+                {
+                    if (string.IsNullOrEmpty(model.SpecializationNames[i])) continue;
+
+                    var spec = new Specialization
+                    {
+                        Name = model.SpecializationNames[i],
+                        YearsNumber = i < model.SpecializationYearsNumbers.Count ?
+                            model.SpecializationYearsNumbers[i] : 2,
+                        Description = i < model.SpecializationDescriptions.Count ?
+                            model.SpecializationDescriptions[i] : "",
+                        AcademicQualification = "",
+                        FacultyId = instituteId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.Specializations.Add(spec);
+                    specCount++;
+                }
+
+                if (specCount > 0)
+                {
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"✅ تم إضافة {specCount} تخصص");
+                }
+            }
+
+            // 2. إضافة فرص العمل (كل اللي في الموديل)
+            if (model.JobOpportunityNames != null)
+            {
+                for (int i = 0; i < model.JobOpportunityNames.Count; i++)
+                {
+                    if (string.IsNullOrEmpty(model.JobOpportunityNames[i])) continue;
+
+                    var job = new JobOpportunity
+                    {
+                        Name = model.JobOpportunityNames[i],
+                        FacultyId = instituteId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.JobOpportunities.Add(job);
+                    jobCount++;
+                }
+
+                if (jobCount > 0)
+                {
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"✅ تم إضافة {jobCount} فرصة عمل");
+                }
+            }
+
+            // 3. إضافة السكن (كل اللي في الموديل)
+            if (model.HousingOptionNames != null)
+            {
+                for (int i = 0; i < model.HousingOptionNames.Count; i++)
+                {
+                    if (string.IsNullOrEmpty(model.HousingOptionNames[i])) continue;
+
+                    string imagePath = null;
+                    if (model.HousingOptionImages != null && i < model.HousingOptionImages.Count &&
+                        model.HousingOptionImages[i] != null && model.HousingOptionImages[i].Length > 0)
+                    {
+                        imagePath = await SaveFile(model.HousingOptionImages[i], "housing-options");
+                    }
+
+                    string phoneNumber = model.HousingOptionPhoneNumbers != null && i < model.HousingOptionPhoneNumbers.Count
+                        ? model.HousingOptionPhoneNumbers[i]
+                        : "";
+
+                    string description = model.HousingOptionDescriptions != null && i < model.HousingOptionDescriptions.Count
+                        ? model.HousingOptionDescriptions[i]
+                        : "";
+
+                    var housing = new FacultyHousingOption
+                    {
+                        Name = model.HousingOptionNames[i],
+                        PhoneNumber = phoneNumber,
+                        Description = description,
+                        ImagePath = imagePath,
+                        FacultyId = instituteId,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    _context.FacultyHousingOptions.Add(housing);
+                    housingCount++;
+                }
+
+                if (housingCount > 0)
+                {
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"✅ تم إضافة {housingCount} خيار سكن");
+                }
+            }
+
+            // 4. إضافة السنوات (كل اللي في الموديل)
+            if (model.YearNames != null && model.YearNames.Count > 0)
+            {
+                for (int yearIndex = 0; yearIndex < model.YearNames.Count; yearIndex++)
+                {
+                    if (string.IsNullOrEmpty(model.YearNames[yearIndex])) continue;
+
+                    string yearName = model.YearNames[yearIndex];
+                    int suffix = 1;
+                    string finalYearName = yearName;
+
+                    while (await _context.StudyPlanYears.AnyAsync(y => y.FacultyId == instituteId && y.YearName == finalYearName))
+                    {
+                        finalYearName = $"{yearName} ({suffix})";
+                        suffix++;
+                    }
+
+                    var studyPlanYear = new StudyPlanYear
+                    {
+                        YearName = finalYearName,
+                        YearNumber = yearIndex + 1,
+                        Type = (yearIndex < model.YearHasSpecialization.Count &&
+                               model.YearHasSpecialization[yearIndex]) ? "Specialized" : "General",
+                        FacultyId = instituteId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.StudyPlanYears.Add(studyPlanYear);
+                    await _context.SaveChangesAsync();
+
+                    var studyPlanYearId = studyPlanYear.Id;
+                    yearCount++;
+
+                    Console.WriteLine($"✅ تم إنشاء السنة: {studyPlanYear.YearName}");
+
+                    // إضافة الوسائط (كل اللي في الموديل)
+                    if (model.MediaTypes != null && model.MediaYearIndices != null)
+                    {
+                        for (int mediaIndex = 0; mediaIndex < model.MediaYearIndices.Count; mediaIndex++)
+                        {
+                            if (model.MediaYearIndices[mediaIndex] == yearIndex &&
+                                mediaIndex < model.MediaTypes.Count &&
+                                !string.IsNullOrEmpty(model.MediaTypes[mediaIndex]))
+                            {
+                                string mediaLink = "";
+
+                                if (model.MediaFiles != null && mediaIndex < model.MediaFiles.Count &&
+                                    model.MediaFiles[mediaIndex] != null && model.MediaFiles[mediaIndex].Length > 0)
+                                {
+                                    mediaLink = await SaveFile(model.MediaFiles[mediaIndex], "studyplan-media");
+                                    Console.WriteLine($"📁 تم رفع ملف جديد: {mediaLink}");
+                                }
+
+                                var media = new StudyPlanMedia
+                                {
+                                    MediaType = model.MediaTypes[mediaIndex],
+                                    MediaLink = mediaLink,
+                                    VisitLink = model.MediaVisitLinks?[mediaIndex] ?? "",
+                                    StudyPlanYearId = studyPlanYearId,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+
+                                _context.StudyPlanMedia.Add(media);
+                                Console.WriteLine($"✅ تم إضافة وسائط للسنة {yearIndex + 1}");
+                            }
+                        }
+                    }
+
+                    // إضافة الفصول والمواد
+                    if (model.SemesterNames != null && model.SemesterYearIndices != null)
+                    {
+                        for (int semIndex = 0; semIndex < model.SemesterYearIndices.Count; semIndex++)
+                        {
+                            if (model.SemesterYearIndices[semIndex] == yearIndex &&
+                                semIndex < model.SemesterNames.Count &&
+                                !string.IsNullOrEmpty(model.SemesterNames[semIndex]))
+                            {
+                                semesterCount++;
+
+                                if (model.SemesterMaterialNames != null &&
+                                    model.SemesterMaterialSemesterIndices != null)
+                                {
+                                    for (int matIndex = 0; matIndex < model.SemesterMaterialSemesterIndices.Count; matIndex++)
+                                    {
+                                        if (model.SemesterMaterialSemesterIndices[matIndex] == semIndex &&
+                                            matIndex < model.SemesterMaterialNames.Count &&
+                                            !string.IsNullOrEmpty(model.SemesterMaterialNames[matIndex]))
+                                        {
+                                            string materialCode = matIndex < model.SemesterMaterialCodes.Count &&
+                                                               !string.IsNullOrEmpty(model.SemesterMaterialCodes[matIndex])
+                                                ? model.SemesterMaterialCodes[matIndex]
+                                                : $"MAT-{yearIndex + 1}-{semIndex + 1}-{matIndex + 1}";
+
+                                            var material = new AcademicMaterial
+                                            {
+                                                Name = model.SemesterMaterialNames[matIndex],
+                                                Code = materialCode,
+                                                Semester = semIndex + 1,
+                                                Type = "Mandatory",
+                                                CreditHours = 3,
+                                                StudyPlanYearId = studyPlanYearId,
+                                                StudyPlanSectionId = null,
+                                                CreatedAt = DateTime.UtcNow
+                                            };
+
+                                            _context.AcademicMaterials.Add(material);
+                                            materialCount++;
+                                            Console.WriteLine($"📚 تم إضافة مادة: {material.Name}");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // إضافة الأقسام والمواد
+                    if (model.SectionNames != null && model.SectionYearIndices != null)
+                    {
+                        for (int secIndex = 0; secIndex < model.SectionYearIndices.Count; secIndex++)
+                        {
+                            if (model.SectionYearIndices[secIndex] == yearIndex &&
+                                secIndex < model.SectionNames.Count &&
+                                !string.IsNullOrEmpty(model.SectionNames[secIndex]))
+                            {
+                                string sectionCode = secIndex < model.SectionCodes.Count &&
+                                                   !string.IsNullOrEmpty(model.SectionCodes[secIndex])
+                                    ? model.SectionCodes[secIndex]
+                                    : $"SEC-{yearIndex + 1}-{secIndex + 1}";
+
+                                var section = new StudyPlanSection
+                                {
+                                    Name = model.SectionNames[secIndex],
+                                    Code = sectionCode,
+                                    StudyPlanYearId = studyPlanYearId,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+
+                                _context.StudyPlanSections.Add(section);
+                                await _context.SaveChangesAsync();
+
+                                var sectionId = section.Id;
+                                sectionCount++;
+                                Console.WriteLine($"✅ تم إنشاء قسم: {section.Name}");
+
+                                if (model.SectionMaterialNames != null &&
+                                    model.SectionMaterialSectionIndices != null)
+                                {
+                                    for (int matIndex = 0; matIndex < model.SectionMaterialSectionIndices.Count; matIndex++)
+                                    {
+                                        if (model.SectionMaterialSectionIndices[matIndex] == secIndex &&
+                                            matIndex < model.SectionMaterialNames.Count &&
+                                            !string.IsNullOrEmpty(model.SectionMaterialNames[matIndex]))
+                                        {
+                                            int materialSemester = 1;
+                                            if (model.SectionMaterialSemesterIndices != null &&
+                                                matIndex < model.SectionMaterialSemesterIndices.Count)
+                                            {
+                                                materialSemester = model.SectionMaterialSemesterIndices[matIndex] + 1;
+                                            }
+
+                                            string materialCode = matIndex < model.SectionMaterialCodes.Count &&
+                                                               !string.IsNullOrEmpty(model.SectionMaterialCodes[matIndex])
+                                                ? model.SectionMaterialCodes[matIndex]
+                                                : $"MAT-SEC-{yearIndex + 1}-{secIndex + 1}-{matIndex + 1}";
+
+                                            var material = new AcademicMaterial
+                                            {
+                                                Name = model.SectionMaterialNames[matIndex],
+                                                Code = materialCode,
+                                                Semester = materialSemester,
+                                                Type = "Mandatory",
+                                                CreditHours = 3,
+                                                StudyPlanYearId = null,
+                                                StudyPlanSectionId = sectionId,
+                                                CreatedAt = DateTime.UtcNow
+                                            };
+
+                                            _context.AcademicMaterials.Add(material);
+                                            materialCount++;
+                                            Console.WriteLine($"📚 تم إضافة مادة للقسم: {material.Name}");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            return new
+            {
+                specializations = specCount,
+                studyYears = yearCount,
+                semesters = semesterCount,
+                sections = sectionCount,
+                materials = materialCount,
+                jobOpportunities = jobCount,
+                housingOptions = housingCount
+            };
         }
         [HttpPut("{instituteId}/expenses-coordination")]
         public async Task<IActionResult> UpdateExpensesAndCoordinationRequired(
@@ -1464,48 +2211,43 @@ namespace BawabaUNI.Controllers.Admin
             return jobCount;
         }
 
-        private async Task HardDeleteAllInstituteDataExceptHousing(int instituteId)
+        private async Task HardDeleteAllInstituteDataExceptMediaAndHousing(int instituteId)
         {
-            Console.WriteLine($"🔥 حذف فعلي لجميع بيانات المعهد {instituteId} (باستثناء السكن)");
+            Console.WriteLine($"🔥 حذف فعلي لجميع بيانات المعهد {instituteId} (باستثناء الوسائط والسكن)");
 
             try
             {
-                // 1. حذف وسائط السنوات
-                await _context.Database.ExecuteSqlRawAsync(
-                    "DELETE FROM StudyPlanMedia WHERE StudyPlanYearId IN (SELECT Id FROM StudyPlanYears WHERE FacultyId = {0})",
-                    instituteId);
-
-                // 2. حذف مواد الأقسام
+                // 1. حذف مواد الأقسام
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM AcademicMaterials WHERE StudyPlanSectionId IN (SELECT Id FROM StudyPlanSections WHERE StudyPlanYearId IN (SELECT Id FROM StudyPlanYears WHERE FacultyId = {0}))",
                     instituteId);
 
-                // 3. حذف مواد السنوات المباشرة
+                // 2. حذف مواد السنوات المباشرة
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM AcademicMaterials WHERE StudyPlanYearId IN (SELECT Id FROM StudyPlanYears WHERE FacultyId = {0})",
                     instituteId);
 
-                // 4. حذف الأقسام
+                // 3. حذف الأقسام
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM StudyPlanSections WHERE StudyPlanYearId IN (SELECT Id FROM StudyPlanYears WHERE FacultyId = {0})",
                     instituteId);
 
-                // 5. حذف السنوات الدراسية
+                // 4. حذف السنوات الدراسية (ملاحظة: لا نحذف StudyPlanMedia هنا)
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM StudyPlanYears WHERE FacultyId = {0}",
                     instituteId);
 
-                // 6. حذف التخصصات
+                // 5. حذف التخصصات
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM Specializations WHERE FacultyId = {0}",
                     instituteId);
 
-                // 7. حذف فرص العمل
+                // 6. حذف فرص العمل
                 await _context.Database.ExecuteSqlRawAsync(
                     "DELETE FROM JobOpportunities WHERE FacultyId = {0}",
                     instituteId);
 
-                Console.WriteLine("✅ تم الحذف الفعلي لجميع البيانات (باستثناء السكن)");
+                Console.WriteLine("✅ تم الحذف الفعلي لجميع البيانات (باستثناء الوسائط والسكن)");
             }
             catch (Exception ex)
             {
@@ -1669,6 +2411,12 @@ namespace BawabaUNI.Controllers.Admin
 
         // فرص العمل
         public List<string>? JobOpportunityNames { get; set; }
+
+        // 🆕 للحذف فقط
+        public List<int>? DeletedSpecializationIds { get; set; }
+        public List<int>? DeletedJobOpportunityIds { get; set; }
+        public List<int>? DeletedYearIds { get; set; }
+        public List<int>? DeletedMediaIds { get; set; }
     }
 
     public class HousingOptionFormModel

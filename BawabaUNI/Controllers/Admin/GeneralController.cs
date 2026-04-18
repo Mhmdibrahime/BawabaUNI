@@ -31,21 +31,58 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         #region Hero Images Endpoints
+        // DTOs for Hero Image
+        public class HeroImageResponseDto
+        {
+            public int Id { get; set; }
+            public string MobileImagePath { get; set; }
+            public string DesktopImageUrl { get; set; }
+            public string TabletImageUrl { get; set; }
+            public string MobileImageUrl { get; set; }
+            public bool IsActive { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime? UpdatedAt { get; set; }
+        }
 
+        public class CreateHeroImageDto
+        {
+            [Required]
+            public IFormFile MobileImage { get; set; }
+
+            [Required]
+            public IFormFile DesktopImage { get; set; }
+
+            [Required]
+            public IFormFile TabletImage { get; set; }
+
+            public bool IsActive { get; set; } = true;
+        }
+
+        public class UpdateHeroImageDto
+        {
+            public IFormFile? MobileImage { get; set; }
+            public IFormFile? DesktopImage { get; set; }
+            public IFormFile? TabletImage { get; set; }
+            public bool IsActive { get; set; }
+        }
+
+        // Updated Controller Endpoints
         // GET: api/admin/general/hero-images
         [HttpGet("hero-images")]
         public async Task<ActionResult<IEnumerable<HeroImageResponseDto>>> GetHeroImages()
         {
             var heroImages = await _context.HeroImages
                 .Where(x => !x.IsDeleted)
-                .OrderBy(x => x.CreatedAt)
+                .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
 
             var result = heroImages.Select(heroImage => new HeroImageResponseDto
             {
                 Id = heroImage.Id,
-                ImagePath = heroImage.ImagePath,
-                ImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.ImagePath}",
+                MobileImagePath = heroImage.MobileImagePath,
+                DesktopImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.DesktobImagePath}",
+                TabletImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.TabletImagePath}",
+                MobileImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.MobileImagePath}",
                 IsActive = heroImage.IsActive,
                 CreatedAt = heroImage.CreatedAt,
                 UpdatedAt = heroImage.UpdatedAt
@@ -61,13 +98,16 @@ namespace BawabaUNI.Controllers.Admin
         {
             var activeImages = await _context.HeroImages
                 .Where(x => x.IsActive && !x.IsDeleted)
+                .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
 
             var result = activeImages.Select(heroImage => new HeroImageResponseDto
             {
                 Id = heroImage.Id,
-                ImagePath = heroImage.ImagePath,
-                ImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.ImagePath}",
+                MobileImagePath = heroImage.MobileImagePath,
+                DesktopImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.DesktobImagePath}",
+                TabletImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.TabletImagePath}",
+                MobileImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.MobileImagePath}",
                 IsActive = heroImage.IsActive,
                 CreatedAt = heroImage.CreatedAt,
                 UpdatedAt = heroImage.UpdatedAt
@@ -91,8 +131,10 @@ namespace BawabaUNI.Controllers.Admin
             var result = new HeroImageResponseDto
             {
                 Id = heroImage.Id,
-                ImagePath = heroImage.ImagePath,
-                ImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.ImagePath}",
+                MobileImagePath = heroImage.MobileImagePath,
+                DesktopImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.DesktobImagePath}",
+                TabletImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.TabletImagePath}",
+                MobileImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.MobileImagePath}",
                 IsActive = heroImage.IsActive,
                 CreatedAt = heroImage.CreatedAt,
                 UpdatedAt = heroImage.UpdatedAt
@@ -103,7 +145,7 @@ namespace BawabaUNI.Controllers.Admin
 
         // POST: api/admin/general/hero-images
         [HttpPost("hero-images")]
-        [RequestSizeLimit(5 * 1024 * 1024)]
+        [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit per file
         public async Task<ActionResult<HeroImageResponseDto>> CreateHeroImage([FromForm] CreateHeroImageDto dto)
         {
             if (!ModelState.IsValid)
@@ -111,30 +153,55 @@ namespace BawabaUNI.Controllers.Admin
                 return BadRequest(ModelState);
             }
 
-            var validationResult = ValidateHeroImageFile(dto.ImageFile);
-            if (!validationResult.IsValid)
-            {
-                return BadRequest(validationResult.ErrorMessage);
-            }
+            // Validate all images
+            var mobileValidation = ValidateHeroImageFile(dto.MobileImage);
+            if (!mobileValidation.IsValid)
+                return BadRequest($"الصورة للجوال: {mobileValidation.ErrorMessage}");
 
-            var fileName = Guid.NewGuid().ToString() + Path.GetExtension(dto.ImageFile.FileName);
+            var desktopValidation = ValidateHeroImageFile(dto.DesktopImage);
+            if (!desktopValidation.IsValid)
+                return BadRequest($"صورة سطح المكتب: {desktopValidation.ErrorMessage}");
+
+            var tabletValidation = ValidateHeroImageFile(dto.TabletImage);
+            if (!tabletValidation.IsValid)
+                return BadRequest($"صورة الجهاز اللوحي: {tabletValidation.ErrorMessage}");
+
+            // Create uploads directory
             var uploadsFolder = Path.Combine(_environment.WebRootPath, "uploads", "hero-images");
-
             if (!Directory.Exists(uploadsFolder))
             {
                 Directory.CreateDirectory(uploadsFolder);
             }
 
-            var filePath = Path.Combine(uploadsFolder, fileName);
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            // Save mobile image
+            var mobileFileName = $"mobile_{Guid.NewGuid()}{Path.GetExtension(dto.MobileImage.FileName)}";
+            var mobileFilePath = Path.Combine(uploadsFolder, mobileFileName);
+            using (var stream = new FileStream(mobileFilePath, FileMode.Create))
             {
-                await dto.ImageFile.CopyToAsync(stream);
+                await dto.MobileImage.CopyToAsync(stream);
+            }
+
+            // Save desktop image
+            var desktopFileName = $"desktop_{Guid.NewGuid()}{Path.GetExtension(dto.DesktopImage.FileName)}";
+            var desktopFilePath = Path.Combine(uploadsFolder, desktopFileName);
+            using (var stream = new FileStream(desktopFilePath, FileMode.Create))
+            {
+                await dto.DesktopImage.CopyToAsync(stream);
+            }
+
+            // Save tablet image
+            var tabletFileName = $"tablet_{Guid.NewGuid()}{Path.GetExtension(dto.TabletImage.FileName)}";
+            var tabletFilePath = Path.Combine(uploadsFolder, tabletFileName);
+            using (var stream = new FileStream(tabletFilePath, FileMode.Create))
+            {
+                await dto.TabletImage.CopyToAsync(stream);
             }
 
             var heroImage = new HeroImage
             {
-                ImagePath = $"/uploads/hero-images/{fileName}",
+                MobileImagePath = $"/uploads/hero-images/{mobileFileName}",
+                DesktobImagePath = $"/uploads/hero-images/{desktopFileName}",
+                TabletImagePath = $"/uploads/hero-images/{tabletFileName}",
                 IsActive = dto.IsActive,
                 CreatedAt = DateTime.UtcNow
             };
@@ -145,8 +212,10 @@ namespace BawabaUNI.Controllers.Admin
             var result = new HeroImageResponseDto
             {
                 Id = heroImage.Id,
-                ImagePath = heroImage.ImagePath,
-                ImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.ImagePath}",
+                MobileImagePath = heroImage.MobileImagePath,
+                DesktopImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.DesktobImagePath}",
+                TabletImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.TabletImagePath}",
+                MobileImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.MobileImagePath}",
                 IsActive = heroImage.IsActive,
                 CreatedAt = heroImage.CreatedAt,
                 UpdatedAt = heroImage.UpdatedAt
@@ -157,7 +226,7 @@ namespace BawabaUNI.Controllers.Admin
 
         // PUT: api/admin/general/hero-images/{id}
         [HttpPut("hero-images/{id}")]
-        [RequestSizeLimit(5 * 1024 * 1024)]
+        [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit per file
         public async Task<IActionResult> UpdateHeroImage(int id, [FromForm] UpdateHeroImageDto dto)
         {
             if (!ModelState.IsValid)
@@ -173,30 +242,81 @@ namespace BawabaUNI.Controllers.Admin
                 return NotFound(new { Message = "لم يتم العثور على الصورة" });
             }
 
-            if (dto.ImageFile != null)
+            var uploadsFolder = Path.Combine(_environment.WebRootPath, "uploads", "hero-images");
+
+            // Update mobile image if provided
+            if (dto.MobileImage != null)
             {
-                var validationResult = ValidateHeroImageFile(dto.ImageFile);
+                var validationResult = ValidateHeroImageFile(dto.MobileImage);
                 if (!validationResult.IsValid)
+                    return BadRequest($"الصورة للجوال: {validationResult.ErrorMessage}");
+
+                // Delete old mobile image
+                var oldMobilePath = Path.Combine(_environment.WebRootPath, heroImage.MobileImagePath.TrimStart('/'));
+                if (System.IO.File.Exists(oldMobilePath))
                 {
-                    return BadRequest(validationResult.ErrorMessage);
+                    System.IO.File.Delete(oldMobilePath);
                 }
 
-                var oldImagePath = Path.Combine(_environment.WebRootPath, heroImage.ImagePath.TrimStart('/'));
-                if (System.IO.File.Exists(oldImagePath))
+                // Save new mobile image
+                var mobileFileName = $"mobile_{Guid.NewGuid()}{Path.GetExtension(dto.MobileImage.FileName)}";
+                var mobileFilePath = Path.Combine(uploadsFolder, mobileFileName);
+                using (var stream = new FileStream(mobileFilePath, FileMode.Create))
                 {
-                    System.IO.File.Delete(oldImagePath);
+                    await dto.MobileImage.CopyToAsync(stream);
                 }
 
-                var fileName = Guid.NewGuid().ToString() + Path.GetExtension(dto.ImageFile.FileName);
-                var uploadsFolder = Path.Combine(_environment.WebRootPath, "uploads", "hero-images");
-                var filePath = Path.Combine(uploadsFolder, fileName);
+                heroImage.MobileImagePath = $"/uploads/hero-images/{mobileFileName}";
+            }
 
-                using (var stream = new FileStream(filePath, FileMode.Create))
+            // Update desktop image if provided
+            if (dto.DesktopImage != null)
+            {
+                var validationResult = ValidateHeroImageFile(dto.DesktopImage);
+                if (!validationResult.IsValid)
+                    return BadRequest($"صورة سطح المكتب: {validationResult.ErrorMessage}");
+
+                // Delete old desktop image
+                var oldDesktopPath = Path.Combine(_environment.WebRootPath, heroImage.DesktobImagePath.TrimStart('/'));
+                if (System.IO.File.Exists(oldDesktopPath))
                 {
-                    await dto.ImageFile.CopyToAsync(stream);
+                    System.IO.File.Delete(oldDesktopPath);
                 }
 
-                heroImage.ImagePath = $"/uploads/hero-images/{fileName}";
+                // Save new desktop image
+                var desktopFileName = $"desktop_{Guid.NewGuid()}{Path.GetExtension(dto.DesktopImage.FileName)}";
+                var desktopFilePath = Path.Combine(uploadsFolder, desktopFileName);
+                using (var stream = new FileStream(desktopFilePath, FileMode.Create))
+                {
+                    await dto.DesktopImage.CopyToAsync(stream);
+                }
+
+                heroImage.DesktobImagePath = $"/uploads/hero-images/{desktopFileName}";
+            }
+
+            // Update tablet image if provided
+            if (dto.TabletImage != null)
+            {
+                var validationResult = ValidateHeroImageFile(dto.TabletImage);
+                if (!validationResult.IsValid)
+                    return BadRequest($"صورة الجهاز اللوحي: {validationResult.ErrorMessage}");
+
+                // Delete old tablet image
+                var oldTabletPath = Path.Combine(_environment.WebRootPath, heroImage.TabletImagePath.TrimStart('/'));
+                if (System.IO.File.Exists(oldTabletPath))
+                {
+                    System.IO.File.Delete(oldTabletPath);
+                }
+
+                // Save new tablet image
+                var tabletFileName = $"tablet_{Guid.NewGuid()}{Path.GetExtension(dto.TabletImage.FileName)}";
+                var tabletFilePath = Path.Combine(uploadsFolder, tabletFileName);
+                using (var stream = new FileStream(tabletFilePath, FileMode.Create))
+                {
+                    await dto.TabletImage.CopyToAsync(stream);
+                }
+
+                heroImage.TabletImagePath = $"/uploads/hero-images/{tabletFileName}";
             }
 
             heroImage.IsActive = dto.IsActive;
@@ -208,8 +328,10 @@ namespace BawabaUNI.Controllers.Admin
             var result = new HeroImageResponseDto
             {
                 Id = heroImage.Id,
-                ImagePath = heroImage.ImagePath,
-                ImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.ImagePath}",
+                MobileImagePath = heroImage.MobileImagePath,
+                DesktopImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.DesktobImagePath}",
+                TabletImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.TabletImagePath}",
+                MobileImageUrl = $"{Request.Scheme}://{Request.Host}{heroImage.MobileImagePath}",
                 IsActive = heroImage.IsActive,
                 CreatedAt = heroImage.CreatedAt,
                 UpdatedAt = heroImage.UpdatedAt
@@ -230,10 +352,23 @@ namespace BawabaUNI.Controllers.Admin
                 return NotFound(new { Message = "لم يتم العثور على الصورة" });
             }
 
-            var imagePath = Path.Combine(_environment.WebRootPath, heroImage.ImagePath.TrimStart('/'));
-            if (System.IO.File.Exists(imagePath))
+            // Delete all three image files
+            var mobilePath = Path.Combine(_environment.WebRootPath, heroImage.MobileImagePath.TrimStart('/'));
+            if (System.IO.File.Exists(mobilePath))
             {
-                System.IO.File.Delete(imagePath);
+                System.IO.File.Delete(mobilePath);
+            }
+
+            var desktopPath = Path.Combine(_environment.WebRootPath, heroImage.DesktobImagePath.TrimStart('/'));
+            if (System.IO.File.Exists(desktopPath))
+            {
+                System.IO.File.Delete(desktopPath);
+            }
+
+            var tabletPath = Path.Combine(_environment.WebRootPath, heroImage.TabletImagePath.TrimStart('/'));
+            if (System.IO.File.Exists(tabletPath))
+            {
+                System.IO.File.Delete(tabletPath);
             }
 
             heroImage.IsDeleted = true;
@@ -290,6 +425,23 @@ namespace BawabaUNI.Controllers.Admin
             return Ok(stats);
         }
 
+        // Helper method for file validation
+        private (bool IsValid, string ErrorMessage) ValidateHeroImageFile(IFormFile file)
+        {
+            if (file == null)
+                return (false, "الملف مطلوب");
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+            if (!allowedExtensions.Contains(extension))
+                return (false, "صيغة الملف غير مدعومة. الصيغ المدعومة: jpg, jpeg, png, webp, gif");
+
+            if (file.Length > 5 * 1024 * 1024) // 5MB
+                return (false, "حجم الملف يجب أن لا يتجاوز 5 ميجابايت");
+
+            return (true, null);
+        }
         #endregion
 
         #region Partners Endpoints
@@ -734,28 +886,28 @@ namespace BawabaUNI.Controllers.Admin
 
         #region Helper Methods
 
-        private (bool IsValid, string ErrorMessage) ValidateHeroImageFile(IFormFile file)
-        {
-            if (file == null)
-            {
-                return (false, "الملف مطلوب");
-            }
+        //private (bool IsValid, string ErrorMessage) ValidateHeroImageFile(IFormFile file)
+        //{
+        //    if (file == null)
+        //    {
+        //        return (false, "الملف مطلوب");
+        //    }
 
-            if (file.Length > 5 * 1024 * 1024)
-            {
-                return (false, "حجم الملف يتجاوز 5 ميجابايت");
-            }
+        //    if (file.Length > 5 * 1024 * 1024)
+        //    {
+        //        return (false, "حجم الملف يتجاوز 5 ميجابايت");
+        //    }
 
-            var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".gif" };
-            var fileExtension = Path.GetExtension(file.FileName).ToLower();
+        //    var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".gif" };
+        //    var fileExtension = Path.GetExtension(file.FileName).ToLower();
 
-            if (!allowedExtensions.Contains(fileExtension))
-            {
-                return (false, "يجب أن يكون الملف من نوع PNG، JPG، أو GIF");
-            }
+        //    if (!allowedExtensions.Contains(fileExtension))
+        //    {
+        //        return (false, "يجب أن يكون الملف من نوع PNG، JPG، أو GIF");
+        //    }
 
-            return (true, null);
-        }
+        //    return (true, null);
+        //}
 
         private (bool IsValid, string ErrorMessage) ValidatePartnerImageFile(IFormFile file)
         {

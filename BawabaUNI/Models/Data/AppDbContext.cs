@@ -33,12 +33,15 @@ namespace BawabaUNI.Models.Data
         public DbSet<AcademicMaterial> AcademicMaterials { get; set; }
         public DbSet<JobOpportunity> JobOpportunities { get; set; }
         public DbSet<Course> Courses { get; set; }
+        public DbSet<CourseActivationCode> CourseActivationCodes { get; set; }
         public DbSet<CourseFeedback> CourseFeedbacks { get; set; }
         public DbSet<LessonLearned> LessonsLearned { get; set; }
         public DbSet<Video> Videos { get; set; }
         public DbSet<VideoAttachment> VideoAttachments { get; set; }
         public DbSet<Article> Articles { get; set; }
+        public DbSet<Book> Books { get; set; }
         public DbSet<Advertisement> Advertisements { get; set; }
+        public DbSet<JobAdvertisement> JobAdvertisements { get; set; }
         public DbSet<Student> Students { get; set; }
         public DbSet<StudentCourse> StudentCourses { get; set; }
         public DbSet<ConsultationRequest> ConsultationRequests { get; set; }

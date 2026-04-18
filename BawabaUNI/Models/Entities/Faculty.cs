@@ -40,6 +40,7 @@ namespace BawabaUNI.Models.Entities
         [Required]
         public bool RequireAcceptanceTests { get; set; }
         public decimal Expenses { get; set; }
+        [Range(50 , 100)]
         public decimal Coordination  { get; set; }
 
         [MaxLength(500)]

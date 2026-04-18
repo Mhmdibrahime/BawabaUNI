@@ -1,4 +1,5 @@
-﻿using BawabaUNI.Models.Data;
+﻿using BawabaUNI.Controllers.Admin;
+using BawabaUNI.Models.Data;
 using BawabaUNI.Models.DTOs;
 using BawabaUNI.Models.DTOs.User;
 using BawabaUNI.Models.Entities;
@@ -46,6 +47,8 @@ namespace BawabaUNI.Controllers.User
             public decimal DiscountPercentage { get; set; }
             public decimal Savings { get; set; }
             public string ShortDescription { get; set; }
+            public int Visits { get; set; } // Added visits field
+
         }
 
         public class CourseDetailDto : CourseResponseDto
@@ -198,7 +201,9 @@ namespace BawabaUNI.Controllers.User
                         DiscountPercentage = c.Discount ?? 0,
                         Savings = c.Discount.HasValue ? c.Price * c.Discount.Value / 100 : 0,
                         ShortDescription = c.Description.Length > 150 ?
-                            c.Description.Substring(0, 150) + "..." : c.Description
+                            c.Description.Substring(0, 150) + "..." : c.Description,
+                        Visits = c.Visits // Include visits count
+
                     })
                     .ToListAsync();
 
@@ -242,12 +247,37 @@ namespace BawabaUNI.Controllers.User
             }
         }
 
-        // 2. الحصول على دورة واحدة بالكامل حسب ID
         [HttpGet("courses/{id}")]
-        public async Task<IActionResult> GetCourseById(int id)
+        public async Task<IActionResult> GetCourseById(
+    int id,
+    [FromHeader(Name = "X-Device-Token")] string deviceToken)
         {
             try
             {
+                // Validate device token existence
+                if (string.IsNullOrEmpty(deviceToken))
+                {
+                    return BadRequest(new
+                    {
+                        Success = false,
+                        Message = "Device token is required. Please refresh the page.",
+                        RequiresToken = true
+                    });
+                }
+
+                // Validate device token
+                var isValidDevice = await ValidateDeviceToken(id, deviceToken);
+
+                if (!isValidDevice)
+                {
+                    return Unauthorized(new
+                    {
+                        Success = false,
+                        Message = "This course is already active on another device. Please logout from the other device first.",
+                        Code = "DEVICE_MISMATCH"
+                    });
+                }
+
                 var course = await _context.Courses
                     .Where(u => !u.IsDeleted)
                     .Include(c => c.LessonsLearned)
@@ -283,9 +313,9 @@ namespace BawabaUNI.Controllers.User
                             Duration = v.DurationInMinutes,
                             VideoUrl = v.VideoLink
                         }).ToList(),
-                        // احصائيات (يمكنك تعديلها حسب جدول StudentCourses)
                         StudentsCount = c.StudentCourses != null ? c.StudentCourses.Count : 0,
-                        AverageRating = 4.9 // افتراضي - يجب تعديله حسب جدول التقييمات
+                        Visits = c.Visits,
+                        AverageRating = 4.9
                     })
                     .FirstOrDefaultAsync();
 
@@ -298,7 +328,9 @@ namespace BawabaUNI.Controllers.User
                     });
                 }
 
-                
+                // Increment visits
+                course.Visits++;
+                await _context.SaveChangesAsync();
 
                 var response = new
                 {
@@ -307,7 +339,6 @@ namespace BawabaUNI.Controllers.User
                     Data = new
                     {
                         Course = course,
-                   
                         Pricing = new
                         {
                             OriginalPrice = course.Price.ToString("C"),
@@ -335,6 +366,245 @@ namespace BawabaUNI.Controllers.User
                 {
                     Success = false,
                     Message = "حدث خطأ أثناء جلب الدورة",
+                    Error = ex.Message
+                });
+            }
+        }
+        // Generate new device token (call from frontend)
+        [HttpGet("generate-device-token")]
+        [Authorize]
+        public IActionResult GenerateDeviceToken()
+        {
+            // Simple GUID token
+            var token = Guid.NewGuid().ToString();
+
+            // You can store it temporarily or return directly
+            return Ok(new
+            {
+                deviceToken = token,
+                message = "Save this token in your browser localStorage"
+            });
+        }
+        // Activate course with code
+        [HttpPost("activate-course")]
+        [Authorize]
+        public async Task<IActionResult> ActivateCourseWithCode([FromBody] ActivateCourseDto request)
+        {
+            try
+            {
+                // Get current user
+                var user = await GetCurrentUser();
+                if (user == null)
+                {
+                    return Unauthorized(new
+                    {
+                        Success = false,
+                        Message = "يجب تسجيل الدخول أولاً"
+                    });
+                }
+
+                // Get student record
+                var student = await GetCurrentStudent();
+                if (student == null)
+                {
+                    return BadRequest(new
+                    {
+                        Success = false,
+                        Message = "لم يتم العثور على بيانات الطالب"
+                    });
+                }
+
+                // Find the activation code
+                var activationCode = await _context.CourseActivationCodes
+                    .Include(c => c.Course)
+                    .FirstOrDefaultAsync(c => c.Code == request.Code && !c.IsDeleted);
+
+                if (activationCode == null)
+                {
+                    return NotFound(new
+                    {
+                        Success = false,
+                        Message = "رمز التفعيل غير صحيح"
+                    });
+                }
+
+                // Check if code is already used
+                if (activationCode.IsUsed)
+                {
+                    return BadRequest(new
+                    {
+                        Success = false,
+                        Message = "هذا الرمز تم استخدامه بالفعل"
+                    });
+                }
+
+                // Check if code is expired
+                if (activationCode.ExpiryDate < DateTime.UtcNow)
+                {
+                    return BadRequest(new
+                    {
+                        Success = false,
+                        Message = "انتهت صلاحية هذا الرمز"
+                    });
+                }
+
+                // Check if student already has this course
+                var existingEnrollment = await _context.StudentCourses
+                    .FirstOrDefaultAsync(sc => sc.StudentId == student.Id &&
+                                               sc.CourseId == activationCode.CourseId &&
+                                               !sc.IsDeleted);
+
+                if (existingEnrollment != null)
+                {
+                    return BadRequest(new
+                    {
+                        Success = false,
+                        Message = "أنت مسجل بالفعل في هذه الدورة"
+                    });
+                }
+
+                // Create enrollment
+                var studentCourse = new StudentCourse
+                {
+                    StudentId = student.Id,
+                    CourseId = activationCode.CourseId,
+                    EnrollmentDate = DateTime.UtcNow,
+                    EnrollmentStatus = "Active",
+                    ProgressPercentage = 0,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.StudentCourses.Add(studentCourse);
+
+                // Mark code as used
+                activationCode.IsUsed = true;
+                activationCode.UsedAt = DateTime.UtcNow;
+                activationCode.UsedByStudentId = student.Id;
+                activationCode.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                // Get course details for response
+                var course = await _context.Courses
+                    .Where(c => c.Id == activationCode.CourseId && !c.IsDeleted)
+                    .Select(c => new
+                    {
+                        c.Id,
+                        c.NameArabic,
+                        c.NameEnglish,
+                        c.PosterImage,
+                        FinalPrice = c.Discount.HasValue ?
+                            c.Price - (c.Price * c.Discount.Value / 100) : c.Price
+                    })
+                    .FirstOrDefaultAsync();
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "تم تفعيل الدورة بنجاح",
+                    Data = new
+                    {
+                        Course = course,
+                        EnrollmentDate = studentCourse.EnrollmentDate,
+                        CodeUsed = activationCode.Code
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء تفعيل الدورة",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        // Check if a code is valid (without activating it)
+        [HttpGet("check-code/{code}")]
+        [Authorize]
+        public async Task<IActionResult> CheckCodeValidity(string code)
+        {
+            try
+            {
+                var activationCode = await _context.CourseActivationCodes
+                    .Include(c => c.Course)
+                    .FirstOrDefaultAsync(c => c.Code == code && !c.IsDeleted);
+
+                if (activationCode == null)
+                {
+                    return Ok(new
+                    {
+                        Success = false,
+                        IsValid = false,
+                        Message = "رمز التفعيل غير صحيح"
+                    });
+                }
+
+                if (activationCode.IsUsed)
+                {
+                    return Ok(new
+                    {
+                        Success = false,
+                        IsValid = false,
+                        Message = "هذا الرمز تم استخدامه بالفعل"
+                    });
+                }
+
+                if (activationCode.ExpiryDate < DateTime.UtcNow)
+                {
+                    return Ok(new
+                    {
+                        Success = false,
+                        IsValid = false,
+                        Message = "انتهت صلاحية هذا الرمز"
+                    });
+                }
+
+                // Check if current user already has this course
+                var user = await GetCurrentUser();
+                if (user != null)
+                {
+                    var student = await GetCurrentStudent();
+                    if (student != null)
+                    {
+                        var existingEnrollment = await _context.StudentCourses
+                            .AnyAsync(sc => sc.StudentId == student.Id &&
+                                            sc.CourseId == activationCode.CourseId &&
+                                            !sc.IsDeleted);
+
+                        if (existingEnrollment)
+                        {
+                            return Ok(new
+                            {
+                                Success = false,
+                                IsValid = false,
+                                Message = "أنت مسجل بالفعل في هذه الدورة"
+                            });
+                        }
+                    }
+                }
+
+                return Ok(new
+                {
+                    Success = true,
+                    IsValid = true,
+                    Message = "الرمز صالح للاستخدام",
+                    Data = new
+                    {
+                        CourseName = activationCode.Course.NameArabic,
+                        CourseId = activationCode.CourseId,
+                        ExpiryDate = activationCode.ExpiryDate
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء التحقق من الرمز",
                     Error = ex.Message
                 });
             }
@@ -672,6 +942,42 @@ namespace BawabaUNI.Controllers.User
                     Error = ex.Message
                 });
             }
+        }
+        // Helper to validate device token
+        private async Task<bool> ValidateDeviceToken(int courseId, string deviceToken)
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return false;
+
+            var student = await GetCurrentStudent();
+            if (student == null) return false;
+
+            var enrollment = await _context.StudentCourses
+                .FirstOrDefaultAsync(sc => sc.StudentId == student.Id &&
+                                           sc.CourseId == courseId &&
+                                           !sc.IsDeleted);
+
+            if (enrollment == null) return false;
+
+            // First time access - register this device
+            if (string.IsNullOrEmpty(enrollment.DeviceToken))
+            {
+                enrollment.DeviceToken = deviceToken;
+                enrollment.LastAccessAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                return true;
+            }
+
+            // Check if same device
+            if (enrollment.DeviceToken == deviceToken)
+            {
+                enrollment.LastAccessAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                return true;
+            }
+
+            // Different device detected
+            return false;
         }
         public class VideoCourseDto
         {

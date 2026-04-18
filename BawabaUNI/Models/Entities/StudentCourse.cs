@@ -8,17 +8,14 @@ namespace BawabaUNI.Models.Entities
     {
         public int StudentId { get; set; }
         public int CourseId { get; set; }
-
-        [Required]
         public DateTime EnrollmentDate { get; set; } = DateTime.UtcNow;
-
-        [MaxLength(50)]
         public string EnrollmentStatus { get; set; } = "Active";
-
         public DateTime? CompletionDate { get; set; }
-
-        [Range(0, 100)]
         public decimal? ProgressPercentage { get; set; } = 0;
+
+        // Add these two properties
+        public string? DeviceToken { get; set; }  // Store the allowed device token
+        public DateTime? LastAccessAt { get; set; }  // Track last access time
 
         [ForeignKey("StudentId")]
         public virtual Student Student { get; set; }

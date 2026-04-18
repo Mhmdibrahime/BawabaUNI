@@ -420,7 +420,7 @@ namespace BawabaUNI.Controllers.User
                             Address = u.Address,
                             City = u.City,
                             FoundingYear = u.FoundingYear,
-                            Documents = u.DocumentsRequired
+                            Documents = u.DocumentsRequired.Where(d => !d.IsDeleted)
                                 .Select(x => new DocumentRequired
                                 {
                                     DocumentName = x.DocumentName,
@@ -435,7 +435,7 @@ namespace BawabaUNI.Controllers.User
 
                 // 3. Load StudyPlanYears with pagination or more selective loading
                 var studyPlanYears = await _context.StudyPlanYears
-                    .Where(y => y.FacultyId == id)
+                    .Where(y => y.FacultyId == id && !y.IsDeleted)
                     .Select(y => new StudyPlanYearDto
                     {
                         Id = y.Id,
@@ -444,7 +444,7 @@ namespace BawabaUNI.Controllers.User
                         Type = y.Type,
                         CreatedDate = y.CreatedAt,
                         // Limit the number of academic materials if there are many
-                        AcademicMaterials = y.AcademicMaterials
+                        AcademicMaterials = y.AcademicMaterials.Where(y => !y.IsDeleted)
                             .Select(am => new AcademicMaterialDto
                             {
                                 Id = am.Id,
@@ -455,17 +455,17 @@ namespace BawabaUNI.Controllers.User
                                 CreditHours = am.CreditHours
                             }).ToList(),
                         // Load sections without their academic materials to reduce complexity
-                        Sections = y.Sections.Select(s => new StudyPlanSectionDto
+                        Sections = y.Sections.Where(s=> !s.IsDeleted).Select(s => new StudyPlanSectionDto
                         {
                             Id = s.Id,
                             Name = s.Name,
                             Code = s.Code,
                             CreditHours = s.CreditHours,
                             // Load academic materials count instead of full list if needed only for stats
-                            AcademicMaterialsCount = s.AcademicMaterials.Count,
+                            AcademicMaterialsCount = s.AcademicMaterials.Where(a => !a.IsDeleted).Count(),
                             AcademicMaterials = new List<AcademicMaterialDto>() // Empty initially
                         }).ToList(),
-                        Media = y.StudyPlanMedia
+                        Media = y.StudyPlanMedia.Where(m => !m.IsDeleted)
                             .Select(m => new StudyPlanMediaDto
                             {
                                 Id = m.Id,
@@ -480,10 +480,10 @@ namespace BawabaUNI.Controllers.User
                 // 4. Load all academic materials in separate queries if needed
                 foreach (var year in studyPlanYears)
                 {
-                    foreach (var section in year.Sections.Where(s => s.Id > 0))
+                    foreach (var section in year.Sections.Where(s => s.Id > 0 ))
                     {
                         var materials = await _context.AcademicMaterials
-                            .Where(am => am.StudyPlanSectionId == section.Id)
+                            .Where(am => am.StudyPlanSectionId == section.Id && !am.IsDeleted)
                             .Select(am => new AcademicMaterialDto
                             {
                                 Id = am.Id,
@@ -505,7 +505,7 @@ namespace BawabaUNI.Controllers.User
                 // Rest of the code remains the same...
                 // 5. Load Specializations
                 var specializations = await _context.Specializations
-                    .Where(s => s.FacultyId == id)
+                    .Where(s => s.FacultyId == id && !s.IsDeleted)
                     .Select(s => new SpecializationDto
                     {
                         Id = s.Id,
@@ -521,7 +521,7 @@ namespace BawabaUNI.Controllers.User
 
                 // 6. Load JobOpportunities
                 var jobOpportunities = await _context.JobOpportunities
-                    .Where(j => j.FacultyId == id)
+                    .Where(j => j.FacultyId == id && !j.IsDeleted)
                     .Select(j => new JobOpportunityDto
                     {
                         Id = j.Id,
@@ -650,6 +650,48 @@ namespace BawabaUNI.Controllers.User
                 Data = faculties
             });
         }
+        // GET: api/User/JobAdvertisements/random
+        // Gets random active job advertisements
+        [HttpGet("random")]
+        public async Task<ActionResult<IEnumerable<UserJobAdvertisementResponseDto>>> GetRandomAdvertisements([FromQuery] int count = 5)
+        {
+            var currentDate = DateTime.UtcNow;
 
+            // Get all active and not deleted advertisements that are within date range
+            var activeAds = await _context.JobAdvertisements
+                .Where(j => !j.IsDeleted
+                    && j.Status == "Active"
+                    && (!j.StartDate.HasValue || j.StartDate <= currentDate)
+                    && (!j.EndDate.HasValue || j.EndDate >= currentDate))
+                .ToListAsync();
+
+            // Get random records
+            var randomAds = activeAds
+                .OrderBy(x => Guid.NewGuid())
+                .Take(count)
+                .Select(j => new UserJobAdvertisementResponseDto
+                {
+                    Id = j.Id,
+                    Description = j.Description,
+                    ImagePath = j.ImagePath,
+                    Link = j.Link,
+                    StartDate = j.StartDate,
+                    EndDate = j.EndDate
+                })
+                .ToList();
+
+            return Ok(randomAds);
+        }
+
+    }
+    public class UserJobAdvertisementResponseDto
+    {
+        public int Id { get; set; }
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public string ImagePath { get; set; }
+        public string Link { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
     }
 }

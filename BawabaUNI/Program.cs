@@ -1,11 +1,11 @@
 using BawabaUNI.Models.Data;
+using BawabaUNI.Services;
 using Digital_Mall_API.Seed;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
 using Microsoft.OpenApi.Models;
 using System.Text;
 
@@ -23,6 +23,9 @@ namespace BawabaUNI
                 Directory.CreateDirectory(wwwrootPath);
 
             builder.Services.AddControllers();
+
+            // ADD THIS - Register HttpClientFactory (Required for Backblaze)
+            builder.Services.AddHttpClient();
 
             // DbContext
             builder.Services.AddDbContext<AppDbContext>(options =>
@@ -61,6 +64,9 @@ namespace BawabaUNI
             });
 
             builder.Services.AddAuthorization();
+
+            builder.Services.AddScoped<IBackblazeService, BackblazeService>();
+            builder.Services.AddScoped<IGoogleDriveService, GoogleDriveService>();
 
             // Swagger
             builder.Services.AddEndpointsApiExplorer();
@@ -117,7 +123,7 @@ namespace BawabaUNI
                 });
             });
 
-            // Response Compression (for API only, not Swagger)
+            // Response Compression
             builder.Services.AddResponseCompression();
 
             var app = builder.Build();
@@ -146,7 +152,7 @@ namespace BawabaUNI
             app.UseSwaggerUI(c =>
             {
                 c.SwaggerEndpoint("/swagger/v1/swagger.json", "BawabaUNI API V1");
-                c.RoutePrefix = "swagger"; // Swagger UI accessible at /swagger
+                c.RoutePrefix = "swagger";
                 c.DisplayRequestDuration();
             });
 

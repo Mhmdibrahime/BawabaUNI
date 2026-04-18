@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -621,14 +622,394 @@ namespace BawabaUNI.Controllers.Admin
             return Ok(classifications);
         }
 
-     
-      
 
-       
+        // Generate activation code for a course
+        [HttpPost("generate-code")]
+        public async Task<IActionResult> GenerateActivationCode([FromBody] GenerateActivationCodeDto request)
+        {
+            try
+            {
+                // Check if course exists
+                var course = await _context.Courses
+                    .FirstOrDefaultAsync(c => c.Id == request.CourseId && !c.IsDeleted);
+
+                if (course == null)
+                {
+                    return NotFound(new { Success = false, Message = "الدورة غير موجودة" });
+                }
+
+                // Validate expiry date
+                if (request.ExpiryDate <= DateTime.UtcNow)
+                {
+                    return BadRequest(new { Success = false, Message = "تاريخ الانتهاء يجب أن يكون في المستقبل" });
+                }
+
+                // Generate unique code
+                string code;
+                bool codeExists;
+                do
+                {
+                    code = GenerateUniqueCode();
+                    codeExists = await _context.CourseActivationCodes
+                        .AnyAsync(c => c.Code == code && !c.IsDeleted);
+                } while (codeExists);
+
+                var activationCode = new CourseActivationCode
+                {
+                    Code = code,
+                    CourseId = request.CourseId,
+                    ExpiryDate = request.ExpiryDate.ToUniversalTime(),
+                    Notes = request.Notes,
+                    CreatedAt = DateTime.UtcNow,
+                    IsUsed = false
+                };
+
+                _context.CourseActivationCodes.Add(activationCode);
+                await _context.SaveChangesAsync();
+
+                var response = new
+                {
+                    Success = true,
+                    Message = "تم إنشاء رمز التفعيل بنجاح",
+                    Data = new
+                    {
+                        activationCode.Id,
+                        activationCode.Code,
+                        CourseName = course.NameArabic,
+                        activationCode.ExpiryDate,
+                        activationCode.Notes,
+                        activationCode.CreatedAt
+                    }
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء إنشاء رمز التفعيل",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        // Generate multiple activation codes
+        [HttpPost("generate-codes-bulk")]
+        public async Task<IActionResult> GenerateMultipleActivationCodes([FromBody] BulkGenerateCodeDto request)
+        {
+            try
+            {
+                var course = await _context.Courses
+                    .FirstOrDefaultAsync(c => c.Id == request.CourseId && !c.IsDeleted);
+
+                if (course == null)
+                {
+                    return NotFound(new { Success = false, Message = "الدورة غير موجودة" });
+                }
+
+                if (request.NumberOfCodes <= 0 || request.NumberOfCodes > 100)
+                {
+                    return BadRequest(new { Success = false, Message = "عدد الرموز يجب أن يكون بين 1 و 100" });
+                }
+
+                if (request.ExpiryDate <= DateTime.UtcNow)
+                {
+                    return BadRequest(new { Success = false, Message = "تاريخ الانتهاء يجب أن يكون في المستقبل" });
+                }
+
+                var codes = new List<CourseActivationCode>();
+                var generatedCodes = new List<string>();
+
+                for (int i = 0; i < request.NumberOfCodes; i++)
+                {
+                    string code;
+                    bool codeExists;
+                    do
+                    {
+                        code = GenerateUniqueCode();
+                        codeExists = await _context.CourseActivationCodes
+                            .AnyAsync(c => c.Code == code && !c.IsDeleted);
+                    } while (codeExists);
+
+                    var activationCode = new CourseActivationCode
+                    {
+                        Code = code,
+                        CourseId = request.CourseId,
+                        ExpiryDate = request.ExpiryDate.ToUniversalTime(),
+                        Notes = request.Notes,
+                        CreatedAt = DateTime.UtcNow,
+                        IsUsed = false
+                    };
+
+                    codes.Add(activationCode);
+                    generatedCodes.Add(code);
+                }
+
+                await _context.CourseActivationCodes.AddRangeAsync(codes);
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = $"تم إنشاء {request.NumberOfCodes} رمز تفعيل بنجاح",
+                    Data = new
+                    {
+                        CourseName = course.NameArabic,
+                        Codes = generatedCodes,
+                        Count = generatedCodes.Count,
+                        ExpiryDate = request.ExpiryDate
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء إنشاء الرموز",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        // Get all activation codes for a course
+        [HttpGet("codes/{courseId}")]
+        public async Task<IActionResult> GetActivationCodes(int courseId,
+            [FromQuery] bool? isUsed = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var query = _context.CourseActivationCodes
+                    .Include(c => c.Course)
+                    .Include(c => c.UsedByStudent)
+                    .ThenInclude(s => s.ApplicationUser)
+                    .Where(c => c.CourseId == courseId && !c.IsDeleted);
+
+                if (isUsed.HasValue)
+                {
+                    query = query.Where(c => c.IsUsed == isUsed.Value);
+                }
+
+                var totalCount = await query.CountAsync();
+                var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                var codes = await query
+                    .OrderByDescending(c => c.CreatedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(c => new ActivationCodeResponseDto
+                    {
+                        Id = c.Id,
+                        Code = c.Code,
+                        CourseId = c.CourseId,
+                        CourseName = c.Course.NameArabic,
+                        ExpiryDate = c.ExpiryDate,
+                        IsUsed = c.IsUsed,
+                        UsedAt = c.UsedAt,
+                        UsedByStudentName = c.UsedByStudent != null ?
+                            c.UsedByStudent.ApplicationUser.FullName : null,
+                        Notes = c.Notes,
+                        CreatedAt = c.CreatedAt,
+                        IsExpired = c.ExpiryDate < DateTime.UtcNow && !c.IsUsed
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "تم جلب رموز التفعيل بنجاح",
+                    Data = new
+                    {
+                        Codes = codes,
+                        TotalCount = totalCount,
+                        TotalPages = totalPages,
+                        CurrentPage = page,
+                        PageSize = pageSize
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء جلب رموز التفعيل",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        // Get code statistics
+        [HttpGet("codes/stats")]
+        public async Task<IActionResult> GetCodeStatistics()
+        {
+            try
+            {
+                var totalCodes = await _context.CourseActivationCodes
+                    .CountAsync(c => !c.IsDeleted);
+
+                var usedCodes = await _context.CourseActivationCodes
+                    .CountAsync(c => !c.IsDeleted && c.IsUsed);
+
+                var expiredCodes = await _context.CourseActivationCodes
+                    .CountAsync(c => !c.IsDeleted && !c.IsUsed && c.ExpiryDate < DateTime.UtcNow);
+
+                var validCodes = totalCodes - usedCodes - expiredCodes;
+
+                var codesByCourse = await _context.CourseActivationCodes
+                    .Where(c => !c.IsDeleted)
+                    .GroupBy(c => c.CourseId)
+                    .Select(g => new
+                    {
+                        CourseId = g.Key,
+                        CourseName = g.First().Course.NameArabic,
+                        TotalCodes = g.Count(),
+                        UsedCodes = g.Count(c => c.IsUsed),
+                        ExpiredCodes = g.Count(c => !c.IsUsed && c.ExpiryDate < DateTime.UtcNow)
+                    })
+                    .OrderByDescending(g => g.TotalCodes)
+                    .Take(10)
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    Success = true,
+                    Data = new
+                    {
+                        TotalCodes = totalCodes,
+                        UsedCodes = usedCodes,
+                        ExpiredCodes = expiredCodes,
+                        ValidCodes = validCodes,
+                        UsagePercentage = totalCodes > 0 ? (usedCodes * 100 / totalCodes) : 0,
+                        CodesByCourse = codesByCourse
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء جلب إحصائيات الرموز",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        // Delete (soft delete) an activation code
+        [HttpDelete("codes/{id}")]
+        public async Task<IActionResult> DeleteActivationCode(int id)
+        {
+            try
+            {
+                var code = await _context.CourseActivationCodes
+                    .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
+
+                if (code == null)
+                {
+                    return NotFound(new { Success = false, Message = "رمز التفعيل غير موجود" });
+                }
+
+                if (code.IsUsed)
+                {
+                    return BadRequest(new { Success = false, Message = "لا يمكن حذف رمز تم استخدامه بالفعل" });
+                }
+
+                code.IsDeleted = true;
+                code.DeletedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "تم حذف رمز التفعيل بنجاح"
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = "حدث خطأ أثناء حذف رمز التفعيل",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        // Helper method to generate unique code
+        private string GenerateUniqueCode()
+        {
+            // Format: XXX-XXX-XXX (e.g., ABC-123-DEF)
+            var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
+            var random = new Random();
+
+            var part1 = new string(Enumerable.Repeat(chars, 3)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
+            var part2 = new string(Enumerable.Repeat(chars, 3)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
+            var part3 = new string(Enumerable.Repeat(chars, 3)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
+
+            return $"{part1}-{part2}-{part3}";
+        }
+
+
 
         private bool CourseExists(int id)
         {
             return _context.Courses.Any(c => c.Id == id && !c.IsDeleted);
         }
+    }
+    public class GenerateActivationCodeDto
+    {
+        [Required]
+        public int CourseId { get; set; }
+
+        [Required]
+        public DateTime ExpiryDate { get; set; }
+
+        [MaxLength(500)]
+        public string? Notes { get; set; }
+    }
+
+    public class ActivationCodeResponseDto
+    {
+        public int Id { get; set; }
+        public string Code { get; set; }
+        public int CourseId { get; set; }
+        public string CourseName { get; set; }
+        public DateTime ExpiryDate { get; set; }
+        public bool IsUsed { get; set; }
+        public DateTime? UsedAt { get; set; }
+        public string? UsedByStudentName { get; set; }
+        public string? Notes { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public bool IsExpired { get; set; }
+    }
+
+    public class ActivateCourseDto
+    {
+        [Required]
+        public string Code { get; set; }
+    }
+    public class BulkGenerateCodeDto
+    {
+        [Required]
+        public int CourseId { get; set; }
+
+        [Required]
+        [Range(1, 100)]
+        public int NumberOfCodes { get; set; }
+
+        [Required]
+        public DateTime ExpiryDate { get; set; }
+
+        [MaxLength(500)]
+        public string? Notes { get; set; }
     }
 }

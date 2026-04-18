@@ -50,6 +50,7 @@ namespace BawabaUNI.Models.Entities
 
         [MaxLength(2000)]
         public string InstructorDescription { get; set; }
+        public int Visits { get; set; } = 0;    
 
         public virtual ICollection<LessonLearned> LessonsLearned { get; set; }
         public virtual ICollection<Video> Videos { get; set; }
