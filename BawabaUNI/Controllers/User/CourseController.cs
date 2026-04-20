@@ -1,4 +1,4 @@
-﻿using BawabaUNI.Controllers.Admin;
+using BawabaUNI.Controllers.Admin;
 using BawabaUNI.Models.Data;
 using BawabaUNI.Models.DTOs;
 using BawabaUNI.Models.DTOs.User;
@@ -248,35 +248,10 @@ namespace BawabaUNI.Controllers.User
         }
 
         [HttpGet("courses/{id}")]
-        public async Task<IActionResult> GetCourseById(
-    int id,
-    [FromHeader(Name = "X-Device-Token")] string deviceToken)
+        public async Task<IActionResult> GetCourseById(int id)
         {
             try
             {
-                // Validate device token existence
-                if (string.IsNullOrEmpty(deviceToken))
-                {
-                    return BadRequest(new
-                    {
-                        Success = false,
-                        Message = "Device token is required. Please refresh the page.",
-                        RequiresToken = true
-                    });
-                }
-
-                // Validate device token
-                var isValidDevice = await ValidateDeviceToken(id, deviceToken);
-
-                if (!isValidDevice)
-                {
-                    return Unauthorized(new
-                    {
-                        Success = false,
-                        Message = "This course is already active on another device. Please logout from the other device first.",
-                        Code = "DEVICE_MISMATCH"
-                    });
-                }
 
                 var course = await _context.Courses
                     .Where(u => !u.IsDeleted)
@@ -370,21 +345,7 @@ namespace BawabaUNI.Controllers.User
                 });
             }
         }
-        // Generate new device token (call from frontend)
-        [HttpGet("generate-device-token")]
-        [Authorize]
-        public IActionResult GenerateDeviceToken()
-        {
-            // Simple GUID token
-            var token = Guid.NewGuid().ToString();
-
-            // You can store it temporarily or return directly
-            return Ok(new
-            {
-                deviceToken = token,
-                message = "Save this token in your browser localStorage"
-            });
-        }
+        // Generate new device token (call from frontend) using logic obsolete now
         // Activate course with code
         [HttpPost("activate-course")]
         [Authorize]
@@ -943,42 +904,7 @@ namespace BawabaUNI.Controllers.User
                 });
             }
         }
-        // Helper to validate device token
-        private async Task<bool> ValidateDeviceToken(int courseId, string deviceToken)
-        {
-            var user = await GetCurrentUser();
-            if (user == null) return false;
-
-            var student = await GetCurrentStudent();
-            if (student == null) return false;
-
-            var enrollment = await _context.StudentCourses
-                .FirstOrDefaultAsync(sc => sc.StudentId == student.Id &&
-                                           sc.CourseId == courseId &&
-                                           !sc.IsDeleted);
-
-            if (enrollment == null) return false;
-
-            // First time access - register this device
-            if (string.IsNullOrEmpty(enrollment.DeviceToken))
-            {
-                enrollment.DeviceToken = deviceToken;
-                enrollment.LastAccessAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
-                return true;
-            }
-
-            // Check if same device
-            if (enrollment.DeviceToken == deviceToken)
-            {
-                enrollment.LastAccessAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
-                return true;
-            }
-
-            // Different device detected
-            return false;
-        }
+        // Helper to validate device token used to be here
         public class VideoCourseDto
         {
             public int Id { get; set; }

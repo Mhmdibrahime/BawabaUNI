@@ -1,4 +1,4 @@
-﻿using BawabaUNI.Migrations;
+using BawabaUNI.Migrations;
 using System.ComponentModel.DataAnnotations;
 
 namespace BawabaUNI.Models.DTOs.User
@@ -37,6 +37,9 @@ namespace BawabaUNI.Models.DTOs.User
 
         [Required(ErrorMessage = "كلمة المرور مطلوبة")]
         public string Password { get; set; }
+
+        public string? FingerprintId { get; set; }
+        public string? DeviceName { get; set; }
     }
 
     public class UserResponseDto

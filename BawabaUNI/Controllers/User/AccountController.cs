@@ -1,4 +1,4 @@
-﻿using BawabaUNI.Models.Data;
+using BawabaUNI.Models.Data;
 using BawabaUNI.Models.DTOs.User;
 using BawabaUNI.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -208,6 +208,50 @@ namespace BawabaUNI.Controllers.User
                         Success = false,
                         Message = "البريد الإلكتروني أو كلمة المرور غير صحيحة"
                     });
+                }
+
+                // Device Fingerprinting Logic
+                if (!string.IsNullOrEmpty(loginDto.FingerprintId))
+                {
+                    var existingDevice = await _context.UserDevices
+                        .FirstOrDefaultAsync(d => d.UserId == user.Id && d.FingerprintId == loginDto.FingerprintId);
+
+                    if (existingDevice != null)
+                    {
+                        existingDevice.LastLogin = DateTime.UtcNow;
+                        if (!string.IsNullOrEmpty(loginDto.DeviceName))
+                            existingDevice.DeviceName = loginDto.DeviceName;
+                        
+                        _context.UserDevices.Update(existingDevice);
+                        await _context.SaveChangesAsync();
+                    }
+                    else
+                    {
+                        var deviceCount = await _context.UserDevices.CountAsync(d => d.UserId == user.Id);
+                        if (deviceCount >= 1)
+                        {
+                            await _signInManager.SignOutAsync();
+                            return StatusCode(403, new
+                            {
+                                Success = false,
+                                Message = "لقد تجاوزت عدد الأجهزة المسموح بها، يرجى إزالة جهاز قديم",
+                                Code = "MAX_DEVICES_REACHED"
+                            });
+                        }
+                        else
+                        {
+                            var newDevice = new UserDevice
+                            {
+                                UserId = user.Id,
+                                FingerprintId = loginDto.FingerprintId,
+                                DeviceName = loginDto.DeviceName ?? "Unknown Device",
+                                LastLogin = DateTime.UtcNow,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _context.UserDevices.AddAsync(newDevice);
+                            await _context.SaveChangesAsync();
+                        }
+                    }
                 }
 
                 // إنشاء التوكن

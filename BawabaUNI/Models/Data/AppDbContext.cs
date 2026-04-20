@@ -1,4 +1,4 @@
-﻿using BawabaUNI.Models;
+using BawabaUNI.Models;
 using BawabaUNI.Models.Data;
 using BawabaUNI.Models.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -49,6 +49,7 @@ namespace BawabaUNI.Models.Data
         public DbSet<DocumentRequiredForStudyAbroad> DocumentsRequiredForStudyAbroad { get; set; }
         public DbSet<FacultyForAbroad> FacultiesForAbroad { get; set; }
         public DbSet<HousingOptionForAbroad> HousingOptionsForAbroad { get; set; }
+        public DbSet<UserDevice> UserDevices { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
