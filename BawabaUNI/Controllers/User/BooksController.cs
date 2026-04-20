@@ -23,7 +23,7 @@ namespace BawabaUNI.Controllers.User
         }
 
         // 1- GET ALL with search, pagination, and filter
-        [HttpGet]
+        [HttpGet("GetAll")]
         public async Task<ActionResult<PaginatedResponseDto<UserBookResponseDto>>> GetAll([FromQuery] UserBookFilterDto filter)
         {
             var query = _context.Books
@@ -117,7 +117,7 @@ namespace BawabaUNI.Controllers.User
         }
 
         // 3- GET by id
-        [HttpGet("{id}")]
+        [HttpGet("{id}/GetById")]
         public async Task<ActionResult<UserBookResponseDto>> GetById(int id)
         {
             var book = await _context.Books
@@ -206,9 +206,9 @@ namespace BawabaUNI.Controllers.User
 
     public class UserBookFilterDto
     {
-        public string Search { get; set; }
-        public string FacultyName { get; set; }
-        public string Subject { get; set; }
+        public string? Search { get; set; }
+        public string? FacultyName { get; set; }
+        public string? Subject { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 10;
         public string SortBy { get; set; } = "CreatedAt";

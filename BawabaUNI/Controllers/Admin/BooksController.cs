@@ -25,7 +25,7 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         // 1- GET ALL with search and pagination
-        [HttpGet]
+        [HttpGet("GetAll")]
         public async Task<ActionResult<PaginatedResponseDto<BookResponseDto>>> GetAll([FromQuery] BookFilterDto filter)
         {
             var query = _context.Books.Where(b => !b.IsDeleted).AsQueryable();
@@ -119,7 +119,7 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         // 3- GET by id
-        [HttpGet("{id}")]
+        [HttpGet("{id}/GetById")]
         public async Task<ActionResult<BookResponseDto>> GetById(int id)
         {
             var book = await _context.Books
@@ -148,7 +148,7 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         // 4- ADD new book with cover image upload to wwwroot
-        [HttpPost]
+        [HttpPost("Create")]
         public async Task<ActionResult<BookResponseDto>> Create([FromForm] BookCreateDto request)
         {
             if (!ModelState.IsValid)
@@ -216,7 +216,7 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         // 5- UPDATE book with cover image upload to wwwroot
-        [HttpPut("{id}")]
+        [HttpPut("{id}/Update")]
         public async Task<IActionResult> Update(int id, [FromForm] BookUpdateDto request)
         {
             var book = await _context.Books
@@ -342,7 +342,7 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         // 6- DELETE (Soft delete)
-        [HttpDelete("{id}")]
+        [HttpDelete("{id}/Delete")]
         public async Task<IActionResult> Delete(int id)
         {
             var book = await _context.Books
@@ -411,9 +411,9 @@ namespace BawabaUNI.Controllers.Admin
     // Filter DTO for Get All with pagination
     public class BookFilterDto
     {
-        public string Search { get; set; }
-        public string FacultyName { get; set; }
-        public string Subject { get; set; }
+        public string? Search { get; set; }
+        public string? FacultyName { get; set; }
+        public string? Subject { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 10;
         public string SortBy { get; set; } = "CreatedAt";

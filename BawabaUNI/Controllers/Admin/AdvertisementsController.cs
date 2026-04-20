@@ -29,7 +29,7 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         // GET: api/Advertisements
-        [HttpGet]
+        [HttpGet("GetAdvertisements")]
         public async Task<ActionResult<IEnumerable<object>>> GetAdvertisements([FromQuery] string search = null)
         {
             var query = _context.Advertisements.Where(a => !a.IsDeleted).AsQueryable();
@@ -63,7 +63,7 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         // GET: api/Advertisements/5
-        [HttpGet("{id}")]
+        [HttpGet("GetAdvertisement/{id}")]
         public async Task<ActionResult<object>> GetAdvertisement(int id)
         {
             var advertisement = await _context.Advertisements
@@ -93,7 +93,7 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         // POST: api/Advertisements
-        [HttpPost]
+        [HttpPost("CreateAdvertisement")]
         public async Task<ActionResult<object>> CreateAdvertisement([FromForm] AdvertisementCreateRequest request)
         {
             string imagePath = null;
@@ -160,7 +160,7 @@ namespace BawabaUNI.Controllers.Admin
         }
 
         // PUT: api/Advertisements/5
-        [HttpPut("{id}")]
+        [HttpPut("{id}/UpdateAdvertisement")]
         public async Task<IActionResult> UpdateAdvertisement(int id, [FromForm] AdvertisementUpdateRequest request)
         {
             var advertisement = await _context.Advertisements
@@ -263,7 +263,7 @@ namespace BawabaUNI.Controllers.Admin
 
         
         // DELETE: api/Advertisements/5 (Soft Delete)
-        [HttpDelete("{id}")]
+        [HttpDelete("{id}/DeleteAdvertisement")]
         public async Task<IActionResult> DeleteAdvertisement(int id)
         {
             var advertisement = await _context.Advertisements

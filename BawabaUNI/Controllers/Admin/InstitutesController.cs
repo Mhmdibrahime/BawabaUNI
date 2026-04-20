@@ -650,7 +650,7 @@ namespace BawabaUNI.Controllers.Admin
                 });
             }
         }
-        // تحديث أو إضافة البيانات الجديدة (المنطق الجديد - يدعم التحديث)
+        // تحديث أو إضافة البيانات الجديدة (المنطق الجديد - نفس الكليات)
         private async Task<object> UpdateOrAddInstituteData(int instituteId, InstituteFormModel model)
         {
             var specCount = 0;
@@ -761,14 +761,14 @@ namespace BawabaUNI.Controllers.Admin
                 }
             }
 
-            // 4. تحديث أو إضافة السنوات (المنطق الجديد)
-            if (model.YearNames != null && model.YearNames.Count > 0)
+            // 4. تحديث أو إضافة السنوات (نفس لوجيك الكليات - باستخدام YearNumbers)
+            if (model.YearNumbers != null && model.YearNumbers.Count > 0)
             {
-                for (int yearIndex = 0; yearIndex < model.YearNames.Count; yearIndex++)
+                for (int i = 0; i < model.YearNumbers.Count; i++)
                 {
-                    if (string.IsNullOrEmpty(model.YearNames[yearIndex])) continue;
-
-                    var yearNumber = yearIndex + 1;
+                    var yearNumber = model.YearNumbers[i];
+                    var yearName = i < model.YearNames.Count ? model.YearNames[i] : $"السنة {yearNumber}";
+                    var hasSpecialization = i < model.YearHasSpecialization.Count && model.YearHasSpecialization[i];
 
                     // 🔍 البحث عن سنة موجودة بنفس الرقم
                     var existingYear = await _context.StudyPlanYears
@@ -780,9 +780,8 @@ namespace BawabaUNI.Controllers.Admin
                     {
                         // ✅ تحديث السنة الموجودة
                         studyPlanYear = existingYear;
-                        studyPlanYear.YearName = model.YearNames[yearIndex];
-                        studyPlanYear.Type = (yearIndex < model.YearHasSpecialization.Count &&
-                                           model.YearHasSpecialization[yearIndex]) ? "Specialized" : "General";
+                        studyPlanYear.YearName = yearName;
+                        studyPlanYear.Type = hasSpecialization ? "Specialized" : "General";
                         studyPlanYear.UpdatedAt = DateTime.UtcNow;
 
                         Console.WriteLine($"✅ تم تحديث السنة الموجودة: السنة رقم {yearNumber} - {studyPlanYear.YearName}");
@@ -793,10 +792,9 @@ namespace BawabaUNI.Controllers.Admin
                     else
                     {
                         // ✅ إضافة سنة جديدة
-                        string yearName = model.YearNames[yearIndex];
-                        int suffix = 1;
+                        // التحقق من عدم وجود اسم مكرر
                         string finalYearName = yearName;
-
+                        int suffix = 1;
                         while (await _context.StudyPlanYears.AnyAsync(y => y.FacultyId == instituteId && y.YearName == finalYearName))
                         {
                             finalYearName = $"{yearName} ({suffix})";
@@ -807,8 +805,7 @@ namespace BawabaUNI.Controllers.Admin
                         {
                             YearName = finalYearName,
                             YearNumber = yearNumber,
-                            Type = (yearIndex < model.YearHasSpecialization.Count &&
-                                   model.YearHasSpecialization[yearIndex]) ? "Specialized" : "General",
+                            Type = hasSpecialization ? "Specialized" : "General",
                             FacultyId = instituteId,
                             CreatedAt = DateTime.UtcNow
                         };
@@ -827,7 +824,7 @@ namespace BawabaUNI.Controllers.Admin
                     {
                         for (int mediaIndex = 0; mediaIndex < model.MediaYearIndices.Count; mediaIndex++)
                         {
-                            if (model.MediaYearIndices[mediaIndex] == yearIndex &&
+                            if (model.MediaYearIndices[mediaIndex] == i &&
                                 mediaIndex < model.MediaTypes.Count &&
                                 !string.IsNullOrEmpty(model.MediaTypes[mediaIndex]))
                             {
@@ -860,7 +857,7 @@ namespace BawabaUNI.Controllers.Admin
                     {
                         for (int semIndex = 0; semIndex < model.SemesterYearIndices.Count; semIndex++)
                         {
-                            if (model.SemesterYearIndices[semIndex] == yearIndex &&
+                            if (model.SemesterYearIndices[semIndex] == i &&
                                 semIndex < model.SemesterNames.Count &&
                                 !string.IsNullOrEmpty(model.SemesterNames[semIndex]))
                             {
@@ -907,7 +904,7 @@ namespace BawabaUNI.Controllers.Admin
                     {
                         for (int secIndex = 0; secIndex < model.SectionYearIndices.Count; secIndex++)
                         {
-                            if (model.SectionYearIndices[secIndex] == yearIndex &&
+                            if (model.SectionYearIndices[secIndex] == i &&
                                 secIndex < model.SectionNames.Count &&
                                 !string.IsNullOrEmpty(model.SectionNames[secIndex]))
                             {
@@ -2379,8 +2376,9 @@ namespace BawabaUNI.Controllers.Admin
         public List<int>? SpecializationYearsNumbers { get; set; }
         public List<string>? SpecializationDescriptions { get; set; }
 
-        // خطة الدراسة - السنوات
-        public List<string>?  YearNames { get; set; }
+        // خطة الدراسة - السنوات (أضف YearNumbers)
+        public List<int>? YearNumbers { get; set; }      // الأرقام الحقيقية للسنوات (1,2,3,4...)
+        public List<string>? YearNames { get; set; }
         public List<bool>? YearHasSpecialization { get; set; }
 
         // الوسائط

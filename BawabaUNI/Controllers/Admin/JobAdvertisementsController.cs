@@ -77,39 +77,129 @@ namespace BawabaUNI.Controllers.Admin
 
         // 3- CREATE
         [HttpPost]
-        public async Task<ActionResult<JobAdvertisementResponseDto>> Create([FromBody] JobAdvertisementCreateDto request)
+        public async Task<ActionResult<JobAdvertisementResponseDto>> Create([FromForm] JobAdvertisementCreateDto request)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var jobAdvertisement = new JobAdvertisement
+            string imagePath = null;
+
+            try
             {
-                Description = request.Description,
-                ImagePath = request.ImagePath,
-                Link = request.Link,
-                Status = request.Status ?? "Active",
-                StartDate = request.StartDate,
-                EndDate = request.EndDate,
-                CreatedAt = DateTime.UtcNow
-            };
+                // Save image file if provided
+                if (request.Image != null)
+                {
+                    imagePath = await SaveImageFile(request.Image);
+                }
 
-            _context.JobAdvertisements.Add(jobAdvertisement);
-            await _context.SaveChangesAsync();
+                var jobAdvertisement = new JobAdvertisement
+                {
+                    Description = request.Description,
+                    ImagePath = imagePath,  // دي بقت متخزنة من الصورة اللي اترفعت
+                    Link = request.Link,
+                    Status = request.Status ?? "Active",
+                    StartDate = request.StartDate,
+                    EndDate = request.EndDate,
+                    CreatedAt = DateTime.UtcNow
+                };
 
-            var response = new JobAdvertisementResponseDto
+                _context.JobAdvertisements.Add(jobAdvertisement);
+                await _context.SaveChangesAsync();
+
+                var response = new JobAdvertisementResponseDto
+                {
+                    Id = jobAdvertisement.Id,
+                    Description = jobAdvertisement.Description,
+                    ImagePath = jobAdvertisement.ImagePath,
+                    Link = jobAdvertisement.Link,
+                    Status = jobAdvertisement.Status,
+                    StartDate = jobAdvertisement.StartDate,
+                    EndDate = jobAdvertisement.EndDate,
+                    CreatedAt = jobAdvertisement.CreatedAt,
+                    UpdatedAt = jobAdvertisement.UpdatedAt
+                };
+
+                return CreatedAtAction(nameof(GetById), new { id = jobAdvertisement.Id }, response);
+            }
+            catch (ArgumentException ex)
             {
-                Id = jobAdvertisement.Id,
-                Description = jobAdvertisement.Description,
-                ImagePath = jobAdvertisement.ImagePath,
-                Link = jobAdvertisement.Link,
-                Status = jobAdvertisement.Status,
-                StartDate = jobAdvertisement.StartDate,
-                EndDate = jobAdvertisement.EndDate,
-                CreatedAt = jobAdvertisement.CreatedAt,
-                UpdatedAt = jobAdvertisement.UpdatedAt
-            };
+                // Clean up file if saved before error
+                if (!string.IsNullOrEmpty(imagePath))
+                {
+                    DeleteImageFile(imagePath);
+                }
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                // Clean up file if saved before error
+                if (!string.IsNullOrEmpty(imagePath))
+                {
+                    DeleteImageFile(imagePath);
+                }
+                return StatusCode(500, new { error = "An error occurred while creating the job advertisement." });
+            }
+        }
+        // Helper method to save image file
+        private async Task<string> SaveImageFile(IFormFile imageFile)
+        {
+            if (imageFile == null || imageFile.Length == 0)
+                return null;
 
-            return CreatedAtAction(nameof(GetById), new { id = jobAdvertisement.Id }, response);
+            // Validate file type
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            var fileExtension = Path.GetExtension(imageFile.FileName).ToLower();
+
+            if (!allowedExtensions.Contains(fileExtension))
+            {
+                throw new ArgumentException("Invalid file type. Only JPG, JPEG, PNG, GIF, and WebP are allowed.");
+            }
+
+            // Validate file size (max 5MB)
+            if (imageFile.Length > 5 * 1024 * 1024)
+            {
+                throw new ArgumentException("File size exceeds 5MB limit.");
+            }
+
+            // Create unique filename
+            var fileName = Guid.NewGuid().ToString() + fileExtension;
+            var uploadsFolder = Path.Combine(_environment.WebRootPath, "uploads", "jobadvertisements");
+
+            // Ensure directory exists
+            if (!Directory.Exists(uploadsFolder))
+            {
+                Directory.CreateDirectory(uploadsFolder);
+            }
+
+            var filePath = Path.Combine(uploadsFolder, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await imageFile.CopyToAsync(stream);
+            }
+
+            // Return relative path for database storage
+            return $"/uploads/jobadvertisements/{fileName}";
+        }
+
+        // Helper method to delete old image file
+        private void DeleteImageFile(string imagePath)
+        {
+            if (string.IsNullOrEmpty(imagePath))
+                return;
+
+            try
+            {
+                var fullPath = Path.Combine(_environment.WebRootPath, imagePath.TrimStart('/'));
+                if (System.IO.File.Exists(fullPath))
+                {
+                    System.IO.File.Delete(fullPath);
+                }
+            }
+            catch (Exception)
+            {
+                // Log error if needed, but don't fail the main operation
+            }
         }
 
         // 4- SOFT DELETE
@@ -209,7 +299,8 @@ namespace BawabaUNI.Controllers.Admin
     public class JobAdvertisementCreateDto
     {
         public string Description { get; set; }
-        public string ImagePath { get; set; }
+        // ✅ وحط السطر ده بداله
+        public IFormFile? Image { get; set; }
         public string Link { get; set; }
         public string Status { get; set; }
         public DateTime? StartDate { get; set; }
